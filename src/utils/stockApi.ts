@@ -13,7 +13,7 @@ export async function fetchTSLAPriceFromFinnhub(): Promise<TeslaPrice | null> {
     const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
     
     if (!FINNHUB_API_KEY) {
-      console.warn('Finnhub API Key가 설정되지 않았습니다. 환경 변수 VITE_FINNHUB_API_KEY를 설정해주세요.');
+      console.warn('Finnhub API Key가 설정되지 않았습니다. .env 파일에 VITE_FINNHUB_API_KEY를 설정해주세요.');
       return null;
     }
 
@@ -41,23 +41,6 @@ export async function fetchTSLAPriceFromFinnhub(): Promise<TeslaPrice | null> {
     const high = typeof data.h === 'number' && data.h > 0 ? data.h : currentPrice; // High price of the day
     const low = typeof data.l === 'number' && data.l > 0 ? data.l : currentPrice; // Low price of the day
     
-    // 디버깅을 위한 로그
-    console.log('✅ [Finnhub API] 실시간 주가 데이터:', {
-      현재가: `$${currentPrice.toFixed(2)}`,
-      전일종가: `$${previousClose.toFixed(2)}`,
-      고가: `$${high.toFixed(2)}`,
-      저가: `$${low.toFixed(2)}`,
-      변동: `${(currentPrice - previousClose) >= 0 ? '+' : ''}${(currentPrice - previousClose).toFixed(2)} (${((currentPrice - previousClose) / previousClose * 100) >= 0 ? '+' : ''}${((currentPrice - previousClose) / previousClose * 100).toFixed(2)}%)`,
-    });
-    
-    // 디버깅을 위한 로그
-    console.log('Finnhub API 응답:', {
-      current: currentPrice,
-      previousClose: previousClose,
-      high: high,
-      low: low,
-      timestamp: data.t
-    });
     
     const change = currentPrice - previousClose;
     const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;

@@ -2,15 +2,23 @@ import { useEffect, useRef } from 'react';
 
 export default function MuskFeed() {
   const widgetRef = useRef<HTMLDivElement>(null);
+  const widgetLoadedRef = useRef<boolean>(false); // 위젯이 이미 로드되었는지 추적
 
   useEffect(() => {
+    // 이미 위젯이 로드되었다면 다시 로드하지 않음 (429 에러 방지)
+    if (widgetLoadedRef.current) {
+      return;
+    }
+
     // X (Twitter) Widgets JS가 로드될 때까지 대기
     const loadTwitterWidget = () => {
-      if (window.twttr && widgetRef.current) {
-        // 기존 위젯이 있다면 제거
-        const existingWidget = widgetRef.current.querySelector('iframe');
+      if (window.twttr && widgetRef.current && !widgetLoadedRef.current) {
+        // 위젯이 이미 있는지 확인
+        const existingWidget = widgetRef.current.querySelector('iframe, a');
         if (existingWidget) {
-          widgetRef.current.innerHTML = '';
+          // 이미 위젯이 있으면 로드하지 않음
+          widgetLoadedRef.current = true;
+          return;
         }
 
         // Elon Musk의 타임라인 임베드 생성
@@ -27,8 +35,26 @@ export default function MuskFeed() {
             } as any,
             widgetRef.current
           )
+          .then(() => {
+            widgetLoadedRef.current = true;
+          })
           .catch((err: Error) => {
             console.error('X widget 로드 실패:', err);
+            // 429 에러인 경우 사용자에게 안내 메시지 표시
+            if (err.message.includes('429') || err.message.includes('Too Many Requests')) {
+              if (widgetRef.current) {
+                widgetRef.current.innerHTML = `
+                  <div class="p-4 text-center text-gray-400">
+                    <p class="mb-2">X 피드를 불러오는 데 너무 많은 요청이 발생했습니다.</p>
+                    <p class="text-sm">잠시 후 새로고침해주세요.</p>
+                    <a href="https://x.com/elonmusk" target="_blank" rel="noopener noreferrer" 
+                       class="mt-4 inline-block px-4 py-2 bg-tesla-red text-white rounded hover:bg-red-700">
+                      Elon Musk의 X 프로필 보기
+                    </a>
+                  </div>
+                `;
+              }
+            }
           });
       }
     };
@@ -38,18 +64,25 @@ export default function MuskFeed() {
       loadTwitterWidget();
     } else {
       // widgets.js 로드를 기다림
+      let checkCount = 0;
+      const maxChecks = 50; // 최대 5초 (100ms * 50)
+      
       const checkInterval = setInterval(() => {
+        checkCount++;
         if (window.twttr && window.twttr.widgets) {
           clearInterval(checkInterval);
           loadTwitterWidget();
+        } else if (checkCount >= maxChecks) {
+          clearInterval(checkInterval);
+          console.warn('X widgets.js 로드 타임아웃');
         }
       }, 100);
-
-      // 10초 후 타임아웃
-      setTimeout(() => {
-        clearInterval(checkInterval);
-      }, 10000);
     }
+
+    // 컴포넌트 언마운트 시 정리
+    return () => {
+      // 위젯은 유지하되, 재마운트 시 중복 로드 방지
+    };
   }, []);
 
   return (
@@ -67,15 +100,7 @@ export default function MuskFeed() {
           ref={widgetRef} 
           className="flex-1 min-h-[600px]"
           style={{ minHeight: '600px' }}
-        >
-          {/* 위젯 로딩 중 표시 */}
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-tesla-red mx-auto mb-2"></div>
-              <p>X 피드를 불러오는 중...</p>
-            </div>
-          </div>
-        </div>
+        />
       </div>
     </div>
   );
