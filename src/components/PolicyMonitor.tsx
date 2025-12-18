@@ -1,10 +1,13 @@
 import { NewsItem } from '../types';
 
-interface PolicyMonitorProps {
+interface TeslaNewsMonitorProps {
   newsItems: NewsItem[];
 }
 
-export default function PolicyMonitor({ newsItems }: PolicyMonitorProps) {
+export default function TeslaNewsMonitor({ newsItems }: TeslaNewsMonitorProps) {
+  // Finnhub News API에서 가져온 뉴스만 필터링 (ID가 'finnhub-'로 시작)
+  const finnhubNewsItems = newsItems.filter(item => item.id.startsWith('finnhub-'));
+
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'policy':
@@ -71,13 +74,18 @@ export default function PolicyMonitor({ newsItems }: PolicyMonitorProps) {
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-full flex flex-col" style={{ maxHeight: 'calc(100vh - 250px)' }}>
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h2 className="text-xl font-bold text-blue-400 flex items-center">
-          🇺🇸 Policy & News Monitor
+          📰 Tesla News Monitor
         </h2>
         <span className="text-xs text-gray-400">실시간</span>
       </div>
       
       <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
-        {newsItems.map((item) => (
+        {finnhubNewsItems.length === 0 ? (
+          <div className="p-4 text-center text-gray-400">
+            <p>Finnhub News API에서 뉴스를 불러오는 중...</p>
+          </div>
+        ) : (
+          finnhubNewsItems.map((item) => (
           <div
             key={item.id}
             className={`p-4 rounded-lg border ${getSentimentColor(item.sentiment)} bg-gray-900/50`}
@@ -100,7 +108,8 @@ export default function PolicyMonitor({ newsItems }: PolicyMonitorProps) {
             <h3 className="text-white font-semibold mb-2">{item.title}</h3>
             <p className="text-sm text-gray-300">{item.content}</p>
           </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import { newsItems as initialNews, muskPosts as initialMuskPosts, currentTeslaPr
 import { getMarketStatus } from '../utils/marketStatus';
 // CORS/프록시 이슈로 인해 CBOE API 호출 비활성화 (시뮬레이션 데이터 사용)
 // import { fetchTSLAPriceFromCBOE } from '../utils/cboeApi';
-import { fetchTSLAPriceFromFinnhub } from '../utils/stockApi';
+import { fetchTSLAPriceFromFinnhub, fetchTSLANewsFromFinnhub } from '../utils/stockApi';
 import { fetchAllNewsFromGoogleRSS } from '../utils/googleNewsRss';
 import { fetchAllNewsFromAPI } from '../utils/newsApi';
 
@@ -186,29 +186,29 @@ export function useNewsUpdate() {
     };
   }, [usedMuskIds]);
 
-  // 뉴스 API에서 뉴스 가져오기 (NewsAPI.org 또는 GNews.io)
-  // 방법 A: NewsAPI/GNews.io 사용 (프록시 없이 직접 호출 가능)
+  // Finnhub News API에서 테슬라 뉴스 가져오기 (주가 업데이트와 동기화)
   const fetchNewsFromAPI = useCallback(async () => {
     try {
-      // NewsAPI 또는 GNews.io에서 뉴스 가져오기
+      // Finnhub News API에서 테슬라 뉴스 가져오기 (우선순위 1)
+      const finnhubNews = await fetchTSLANewsFromFinnhub();
+      
+      if (finnhubNews.length > 0) {
+        setNewsItems((prev) => {
+          const existingIds = new Set(prev.map(item => item.id));
+          const newUniqueNews = finnhubNews.filter(item => !existingIds.has(item.id));
+          const updated = [...newUniqueNews, ...prev];
+          return updated
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 20);
+        });
+        setLastUpdate(new Date());
+        return;
+      }
+
+      // Finnhub 실패 시 NewsAPI/GNews.io 시도 (fallback)
       const apiNews = await fetchAllNewsFromAPI();
       
-      // API에서 뉴스를 가져오지 못하면 RSS 시도 (fallback)
-      if (apiNews.length === 0) {
-        const rssNews = await fetchAllNewsFromGoogleRSS();
-        if (rssNews.length > 0) {
-          setNewsItems((prev) => {
-            const existingTitles = new Set(prev.map(item => item.title.toLowerCase()));
-            const newUniqueNews = rssNews.filter(item => !existingTitles.has(item.title.toLowerCase()));
-            const updated = [...newUniqueNews, ...prev];
-            return updated
-              .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, 20);
-          });
-          setLastUpdate(new Date());
-        }
-      } else {
-        // API에서 뉴스를 성공적으로 가져온 경우
+      if (apiNews.length > 0) {
         setNewsItems((prev) => {
           const existingTitles = new Set(prev.map(item => item.title.toLowerCase()));
           const newUniqueNews = apiNews.filter(item => !existingTitles.has(item.title.toLowerCase()));
@@ -218,9 +218,25 @@ export function useNewsUpdate() {
             .slice(0, 20);
         });
         setLastUpdate(new Date());
+        return;
+      }
+
+      // 모든 API 실패 시 RSS 시도 (최종 fallback)
+      const rssNews = await fetchAllNewsFromGoogleRSS();
+      if (rssNews.length > 0) {
+        setNewsItems((prev) => {
+          const existingTitles = new Set(prev.map(item => item.title.toLowerCase()));
+          const newUniqueNews = rssNews.filter(item => !existingTitles.has(item.title.toLowerCase()));
+          const updated = [...newUniqueNews, ...prev];
+          return updated
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 20);
+        });
+        setLastUpdate(new Date());
       }
     } catch (error) {
-      // 에러는 조용히 무시 (기존 시뮬레이션 데이터 계속 사용)
+      console.error('뉴스 가져오기 실패:', error);
+      // 에러는 조용히 무시 (기존 데이터 계속 사용)
     }
   }, []);
 
@@ -303,29 +319,40 @@ export function useNewsUpdate() {
     });
   }, [getRandomNews, getRandomMuskPost]);
 
-  // Finnhub API를 통한 실시간 주가 가져오기 (1분마다)
-  // Finnhub는 무료 플랜에서 실시간 주가(L1 데이터)를 제공합니다
+  // Finnhub API를 통한 실시간 주가 및 뉴스 가져오기 (1분마다)
+  // Finnhub는 무료 플랜에서 실시간 주가(L1 데이터)와 뉴스를 제공합니다
   const fetchRealTimePrice = useCallback(async () => {
     try {
-      const priceData = await fetchTSLAPriceFromFinnhub();
+      // 주가와 뉴스를 동시에 가져오기
+      const [priceData] = await Promise.all([
+        fetchTSLAPriceFromFinnhub(),
+        fetchNewsFromAPI(), // 주가 업데이트 시점에 뉴스도 함께 갱신
+      ]);
+      
       if (priceData) {
         setTeslaPrice((prev) => {
           const marketStatus = getMarketStatus();
           
           // 종가 처리 로직:
-          // 1. 초기 데이터(initialPrice)에서 온 경우 (closePrice가 initial 값과 같음): API에서 받은 종가로 업데이트
-          // 2. 이미 API 데이터로 설정된 경우: 종가는 하루 종일 유지 (변경하지 않음)
-          // 3. 다음 거래일 시작 시 (마켓이 closed에서 premarket로 변경): 새로운 종가로 업데이트
-          const isInitialData = prev.closePrice === initialPrice.closePrice;
+          // 1. 초기 데이터(initialPrice)에서 온 경우: 항상 API에서 받은 종가로 업데이트
+          // 2. 다음 거래일 시작 시 (마켓이 closed에서 premarket로 변경): 새로운 종가로 업데이트
+          // 3. 그 외: 종가는 하루 종일 유지 (변경하지 않음)
+          const isInitialData = Math.abs(prev.closePrice - initialPrice.closePrice) < 0.01; // 부동소수점 비교
           const isMarketDayChange = prev.marketStatus === 'closed' && marketStatus === 'premarket';
           
-          let newClosePrice = prev.closePrice;
+          // 초기 로드이거나 새 거래일 시작 시 API 종가 사용, 그 외에는 기존 종가 유지
+          const newClosePrice = (isInitialData || isMarketDayChange) 
+            ? priceData.closePrice 
+            : prev.closePrice;
           
-          if (isInitialData || isMarketDayChange) {
-            // 초기 로드 또는 새 거래일 시작 시 API에서 받은 종가 사용
-            newClosePrice = priceData.closePrice;
+          // 디버깅: 종가 업데이트 확인
+          if (isInitialData && newClosePrice !== prev.closePrice) {
+            console.log('✅ 종가 업데이트:', {
+              '기존 종가 (초기값)': prev.closePrice,
+              '새 종가 (API)': newClosePrice,
+              'API 데이터': priceData.closePrice
+            });
           }
-          // 그 외에는 기존 종가 유지
           
           // previousMarketClose는 마켓 세그먼트 변경 시에만 업데이트
           let newPreviousMarketClose = prev.previousMarketClose;
@@ -347,9 +374,17 @@ export function useNewsUpdate() {
           const newChange = priceData.current - newClosePrice;
           const newChangePercent = newClosePrice > 0 ? (newChange / newClosePrice) * 100 : 0;
           
-          // 고가/저가 업데이트 (마켓이 열려있을 때만)
-          const newHigh = marketStatus !== 'closed' ? Math.max(prev.high, priceData.current) : priceData.high;
-          const newLow = marketStatus !== 'closed' ? Math.min(prev.low, priceData.current) : priceData.low;
+          // 고가/저가 업데이트
+          // 초기 로드 시: API에서 받은 값 사용
+          // 이후: 마켓이 열려있으면 누적, 닫혀있으면 API 값 사용
+          let newHigh = priceData.high;
+          let newLow = priceData.low;
+          
+          if (!isInitialData && marketStatus !== 'closed') {
+            // 이미 API 데이터가 있고 마켓이 열려있으면 누적
+            newHigh = Math.max(prev.high, priceData.current);
+            newLow = Math.min(prev.low, priceData.current);
+          }
 
           return {
             ...priceData,
@@ -376,15 +411,11 @@ export function useNewsUpdate() {
     updateNews(); // 시뮬레이션 뉴스 및 트윗 초기 로드
     fetchRealTimePrice(); // Finnhub API로 실시간 주가 가져오기
     
-    // 주가 업데이트: Finnhub API를 1분마다 호출 (실시간 데이터)
+    // 주가 및 뉴스 업데이트: Finnhub API를 1분마다 호출 (실시간 데이터)
+    // 주가 업데이트 시점에 뉴스도 함께 갱신
     const priceInterval = setInterval(() => {
-      fetchRealTimePrice();
+      fetchRealTimePrice(); // 주가와 뉴스를 함께 업데이트
     }, 60000); // 1분마다 업데이트
-    
-    // 뉴스 업데이트: 1분마다 NewsAPI/GNews.io에서 가져오기
-    const newsApiInterval = setInterval(() => {
-      fetchNewsFromAPI();
-    }, 60000); // 1분마다 뉴스 API 업데이트
     
     // 뉴스 및 트윗 업데이트: 1분마다 체크 (시뮬레이션 백업)
     const newsInterval = setInterval(() => {
@@ -393,7 +424,6 @@ export function useNewsUpdate() {
 
     return () => {
       clearInterval(priceInterval);
-      clearInterval(newsApiInterval);
       clearInterval(newsInterval);
     };
   }, [updateNews, fetchNewsFromAPI, fetchRealTimePrice]);

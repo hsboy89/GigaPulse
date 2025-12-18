@@ -77,30 +77,32 @@ export default function PortfolioSimulator({
           </span>
         </div>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">현재 주가:</span>
+            <span className="text-white font-semibold">${teslaPrice.current.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">평균 단가:</span>
+            <span className="text-gray-300">${portfolio.avgPrice.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center border-t border-gray-700 pt-2">
             <span className="text-gray-400">현재 평가액:</span>
             <span className="text-white font-semibold">{formatCurrency(result.currentValue)}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">손익금 (미세금):</span>
-            <span className={result.profit >= 0 ? 'text-tesla-green' : 'text-red-400'}>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">초기 투자금:</span>
+            <span className="text-gray-300">{formatCurrency(portfolio.shares * portfolio.avgPrice)}</span>
+          </div>
+          <div className="flex justify-between items-center border-t border-gray-700 pt-2">
+            <span className="text-gray-400">손익금:</span>
+            <span className={result.profit >= 0 ? 'text-tesla-green font-semibold' : 'text-red-400 font-semibold'}>
               {formatCurrency(result.profit)} ({formatPercent(result.profitPercent)})
             </span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between items-center">
             <span className="text-gray-400">손익금 (원화):</span>
-            <span className={result.profitKRW >= 0 ? 'text-tesla-green' : 'text-red-400'}>
+            <span className={result.profitKRW >= 0 ? 'text-tesla-green font-bold' : 'text-red-400 font-bold'}>
               {formatCurrency(result.profitKRW, 'KRW')}
-            </span>
-          </div>
-          <div className="flex justify-between border-t border-gray-700 pt-2">
-            <span className="text-gray-400">세금 (22%, 250만원 공제):</span>
-            <span className="text-red-400">{formatCurrency(result.tax, 'KRW')}</span>
-          </div>
-          <div className="flex justify-between border-t border-gray-700 pt-2">
-            <span className="text-gray-400">실질 수익금:</span>
-            <span className={result.afterTaxProfit >= 0 ? 'text-tesla-green font-bold' : 'text-red-400 font-bold'}>
-              {formatCurrency(result.afterTaxProfit, 'KRW')}
             </span>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { TeslaPrice } from '../types';
+import { TeslaPrice, NewsItem } from '../types';
 import { getMarketStatus } from './marketStatus';
 
 /**
@@ -8,13 +8,29 @@ import { getMarketStatus } from './marketStatus';
  */
 export async function fetchTSLAPriceFromFinnhub(): Promise<TeslaPrice | null> {
   try {
-    // Finnhub API 키 (환경 변수에서 가져오기)
+    // Finnhub API 키 (.env 파일의 VITE_FINNHUB_API_KEY 사용)
+    // 중요: API 키는 .env 파일에만 저장하고 코드에는 포함하지 않음
     // @ts-ignore - Vite 환경 변수 타입 정의
-    const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+    const envKey = import.meta.env.VITE_FINNHUB_API_KEY;
+    
+    // 로컬 개발 환경에서만 기본값 사용 (프로덕션에서는 환경 변수 필수)
+    // @ts-ignore
+    const isDev = import.meta.env.DEV;
+    const FINNHUB_API_KEY = envKey || (isDev ? 'd51p8cpr01qiituq8gbgd51p8cpr01qiituq8gc0' : null);
     
     if (!FINNHUB_API_KEY) {
-      console.warn('Finnhub API Key가 설정되지 않았습니다. .env 파일에 VITE_FINNHUB_API_KEY를 설정해주세요.');
+      console.warn(
+        'Finnhub API Key가 설정되지 않았습니다.\n' +
+        '프로젝트 루트에 .env 파일을 생성하고 다음 내용을 추가하세요:\n' +
+        'VITE_FINNHUB_API_KEY=your_api_key_here\n' +
+        '또는 서버를 재시작하세요 (환경 변수는 서버 시작 시에만 로드됩니다)'
+      );
       return null;
+    }
+    
+    // 환경 변수가 로드되었는지 확인 (개발 환경에서만)
+    if (!envKey && isDev) {
+      console.log('⚠️ 환경 변수가 로드되지 않아 기본값을 사용합니다. 서버를 재시작하세요.');
     }
 
     const url = `https://finnhub.io/api/v1/quote?symbol=TSLA&token=${FINNHUB_API_KEY}`;
@@ -203,3 +219,132 @@ export async function fetchTSLAPriceSimple(): Promise<TeslaPrice | null> {
   }
 }
 
+/**
+ * Finnhub API를 통해 TSLA 관련 최신 뉴스를 가져옵니다
+ * 무료 플랜에서 최근 1년간의 뉴스를 제공합니다.
+ * API 키는 환경 변수 VITE_FINNHUB_API_KEY로 설정하거나 직접 입력할 수 있습니다.
+ */
+export async function fetchTSLANewsFromFinnhub(): Promise<NewsItem[]> {
+  try {
+    // Finnhub API 키 (.env 파일의 VITE_FINNHUB_API_KEY 사용)
+    // @ts-ignore - Vite 환경 변수 타입 정의
+    const envKey = import.meta.env.VITE_FINNHUB_API_KEY;
+    
+    // @ts-ignore
+    const isDev = import.meta.env.DEV;
+    const FINNHUB_API_KEY = envKey || (isDev ? 'd51p8cpr01qiituq8gbgd51p8cpr01qiituq8gc0' : null);
+    
+    if (!FINNHUB_API_KEY) {
+      console.warn('Finnhub API Key가 설정되지 않았습니다. 뉴스를 가져올 수 없습니다.');
+      return [];
+    }
+
+    // 오늘 날짜와 7일 전 날짜 계산 (최근 7일간의 뉴스)
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const formatDate = (date: Date): string => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const fromDate = formatDate(sevenDaysAgo);
+    const toDate = formatDate(today);
+
+    const url = `https://finnhub.io/api/v1/company-news?symbol=TSLA&from=${fromDate}&to=${toDate}&token=${FINNHUB_API_KEY}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Finnhub API 응답은 배열 형태
+    if (!Array.isArray(data)) {
+      console.warn('Finnhub News API가 예상한 형식의 데이터를 반환하지 않았습니다.');
+      return [];
+    }
+
+    // 뉴스 데이터를 NewsItem 형식으로 변환
+    const newsItems: NewsItem[] = data
+      .filter((item: any) => item.headline && item.summary) // 제목과 요약이 있는 뉴스만 필터링
+      .map((item: any, index: number) => {
+        // 카테고리 분류 (제목과 요약 내용 기반)
+        let category: 'musk' | 'policy' | 'macro' | 'tesla' = 'tesla';
+        const headlineLower = (item.headline || '').toLowerCase();
+        const summaryLower = (item.summary || '').toLowerCase();
+        const combinedText = `${headlineLower} ${summaryLower}`;
+
+        if (combinedText.includes('musk') || combinedText.includes('elon')) {
+          category = 'musk';
+        } else if (
+          combinedText.includes('policy') ||
+          combinedText.includes('trump') ||
+          combinedText.includes('government') ||
+          combinedText.includes('regulation') ||
+          combinedText.includes('subsidy') ||
+          combinedText.includes('ira')
+        ) {
+          category = 'policy';
+        } else if (
+          combinedText.includes('economy') ||
+          combinedText.includes('inflation') ||
+          combinedText.includes('fed') ||
+          combinedText.includes('interest rate') ||
+          combinedText.includes('dollar')
+        ) {
+          category = 'macro';
+        }
+
+        // 감정 분석 (간단한 키워드 기반)
+        let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
+        const positiveKeywords = ['surge', 'gain', 'rise', 'increase', 'growth', 'success', 'approval', 'breakthrough', 'record'];
+        const negativeKeywords = ['fall', 'drop', 'decline', 'loss', 'fine', 'penalty', 'lawsuit', 'concern', 'risk'];
+        
+        const positiveCount = positiveKeywords.filter(keyword => combinedText.includes(keyword)).length;
+        const negativeCount = negativeKeywords.filter(keyword => combinedText.includes(keyword)).length;
+        
+        if (positiveCount > negativeCount) {
+          sentiment = 'positive';
+        } else if (negativeCount > positiveCount) {
+          sentiment = 'negative';
+        }
+
+        // 영향도 계산 (간단한 휴리스틱)
+        let impact = 0;
+        if (sentiment === 'positive') {
+          impact = Math.min(20, positiveCount * 3);
+        } else if (sentiment === 'negative') {
+          impact = Math.max(-20, -negativeCount * 3);
+        }
+
+        // Unix timestamp를 ISO string으로 변환
+        const timestamp = item.datetime 
+          ? new Date(item.datetime * 1000).toISOString()
+          : new Date().toISOString();
+
+        return {
+          id: `finnhub-${item.id || index}-${item.datetime || Date.now()}`,
+          title: item.headline || 'No title',
+          content: item.summary || item.headline || 'No content',
+          category,
+          timestamp,
+          sentiment,
+          impact,
+        };
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // 최신순 정렬
+      .slice(0, 20); // 최대 20개만 반환
+
+    console.log(`✅ Finnhub에서 ${newsItems.length}개의 테슬라 뉴스를 가져왔습니다.`);
+    return newsItems;
+  } catch (error) {
+    console.error('Error fetching TSLA news from Finnhub:', error);
+    return [];
+  }
+}
