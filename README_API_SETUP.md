@@ -1,5 +1,31 @@
 # API 설정 가이드
 
+## 주가 API 설정
+
+### Finnhub API (추천)
+
+Finnhub는 무료 플랜에서 실시간 주가(L1 데이터)를 제공합니다.
+
+1. **API 키 발급**
+   - https://finnhub.io/ 에서 무료 계정 생성
+   - 무료 티어: 1분당 60 요청 (충분함)
+
+2. **환경 변수 설정**
+   - 프로젝트 루트에 `.env` 파일 생성 또는 수정
+   - 다음 내용 추가:
+     ```
+     VITE_FINNHUB_API_KEY=your_finnhub_api_key_here
+     ```
+
+3. **동작 방식**
+   - `useNewsUpdate` 훅에서 5초마다 자동으로 API 호출
+   - `fetch('https://finnhub.io/api/v1/quote?symbol=TSLA&token=YOUR_TOKEN')`
+   - 가져온 `c` (Current Price) 값을 상태에 저장하고 화면에 표시
+
+4. **API 키가 없을 경우**
+   - 시뮬레이션 데이터 사용
+   - 콘솔에 경고 메시지 출력
+
 ## 뉴스 API 설정
 
 현재 뉴스 데이터는 Google News RSS를 사용하고 있으며, CORS 프록시 문제로 인해 NewsAPI나 GNews.io 같은 전용 API를 사용하는 것을 권장합니다.
@@ -45,6 +71,18 @@ Twitter 위젯 대신 Elon Musk의 X 프로필로 연결되는 버튼을 사용�
 
 ## 참고사항
 
+### 주가 API
+- Finnhub 무료 티어: 1분당 60 요청 (5초마다 호출 시 충분함)
+- API 키가 없어도 시뮬레이션 데이터로 작동 가능
+
+### 뉴스 API
 - NewsAPI.org 무료 티어는 프로덕션 환경에서 사용 불가 (개발/테스트만 가능)
 - 프로덕션 환경에서는 유료 플랜 또는 백엔드 서버를 통한 API 호출 권장
+
+### 전체 설정 예시 (.env 파일)
+```
+VITE_FINNHUB_API_KEY=your_finnhub_api_key_here
+VITE_NEWS_API_KEY=your_newsapi_key_here
+VITE_GNEWS_API_KEY=your_gnews_api_key_here
+```
 

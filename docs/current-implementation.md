@@ -234,7 +234,7 @@ GigaPulse/
 │   │   ├── MacroIndicators.tsx    # 거시경제 지표
 │   │   └── FearGreedIndex.tsx     # Fear & Greed Index
 │   ├── data/
-│   │   └── initialData.ts        # 초기 데이터 (뉴스, 트윗, 주가)
+│   │   └── initialData.ts         # 초기 데이터 (뉴스, 트윗, 주가)
 │   ├── hooks/
 │   │   └── useNewsUpdate.ts       # 뉴스/트윗 업데이트 로직
 │   ├── types/
@@ -244,10 +244,10 @@ GigaPulse/
 │   │   ├── taxCalculator.ts       # 세금 계산
 │   │   ├── marketStatus.ts        # 마켓 상태 감지
 │   │   ├── newsApi.ts             # NewsAPI/GNews.io 통합 (방법 A)
-│   │   ├── googleNewsRss.ts      # Google News RSS (Fallback)
+│   │   ├── googleNewsRss.ts       # Google News RSS (Fallback)
 │   │   ├── cboeApi.ts             # CBOE API (비활성화)
 │   │   ├── stockApi.ts            # 주가 API (미사용)
-│   │   └── tradingViewApi.ts     # TradingView API (미사용)
+│   │   └── tradingViewApi.ts      # TradingView API (미사용)
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── index.css

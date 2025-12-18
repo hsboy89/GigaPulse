@@ -9,7 +9,7 @@ import { Portfolio, Scenario } from '../types';
 import { useNewsUpdate } from '../hooks/useNewsUpdate';
 
 export default function Dashboard() {
-  const { newsItems, muskPosts, teslaPrice, lastUpdate } = useNewsUpdate();
+  const { newsItems, teslaPrice, lastUpdate } = useNewsUpdate();
   const [portfolio, setPortfolio] = useState<Portfolio>({
     shares: 10,
     avgPrice: 400,
@@ -29,7 +29,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Left Panel: Elon Musk Feed */}
           <div className="lg:col-span-1">
-            <MuskFeed muskPosts={muskPosts} />
+            <MuskFeed />
           </div>
           
           {/* Center Panel: Policy & News */}

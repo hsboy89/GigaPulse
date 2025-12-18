@@ -4,6 +4,7 @@ import { newsItems as initialNews, muskPosts as initialMuskPosts, currentTeslaPr
 import { getMarketStatus } from '../utils/marketStatus';
 // CORS/프록시 이슈로 인해 CBOE API 호출 비활성화 (시뮬레이션 데이터 사용)
 // import { fetchTSLAPriceFromCBOE } from '../utils/cboeApi';
+import { fetchTSLAPriceFromFinnhub } from '../utils/stockApi';
 import { fetchAllNewsFromGoogleRSS } from '../utils/googleNewsRss';
 import { fetchAllNewsFromAPI } from '../utils/newsApi';
 
@@ -271,32 +272,16 @@ export function useNewsUpdate() {
       }
     }
 
-    // 주가 데이터 업데이트 (TradingView 위젯은 시각적 표시만 제공)
-    // 마켓 상태에 따라 가격을 미세 조정하여 실시간감 부여
+    // 주가 데이터는 Finnhub API에서만 업데이트하므로 여기서는 주가 업데이트 제거
+    // 마켓 상태만 업데이트 (다른 로직에 필요할 수 있음)
     setTeslaPrice((prev) => {
       const now = new Date();
       const marketStatus = getMarketStatus(now);
       const prevMarketStatus = prev.marketStatus;
       
-      // closePrice는 전일 종가로 하루 종일 동일하게 유지
-      const newClosePrice = prev.closePrice;
-      
-      // 마켓이 열려있으면 가격 미세 조정, 닫혀있으면 종가 사용
-      let newPrice = prev.current;
+      // 마켓 세그먼트가 변경되었을 때 이전 세그먼트 종료 가격 저장만 처리
       let newPreviousMarketClose = prev.previousMarketClose;
       
-      if (marketStatus !== 'closed') {
-        // 마켓이 열려있을 때: 종가 기준 ±3% 범위 내에서 미세 변동
-        const change = (Math.random() - 0.5) * 0.8; // -0.4 ~ +0.4 범위
-        const minPrice = prev.closePrice * 0.97;
-        const maxPrice = prev.closePrice * 1.03;
-        newPrice = Math.max(minPrice, Math.min(maxPrice, prev.current + change));
-      } else {
-        // 마켓이 닫혀있을 때: 종가 사용
-        newPrice = newClosePrice;
-      }
-      
-      // 마켓 세그먼트가 변경되었을 때 이전 세그먼트 종료 가격 저장
       if (prevMarketStatus !== marketStatus) {
         if (prevMarketStatus === 'closed' && marketStatus === 'premarket') {
           newPreviousMarketClose = prev.closePrice;
@@ -308,75 +293,93 @@ export function useNewsUpdate() {
           newPreviousMarketClose = prev.current;
         }
       }
-      
-      // 변동률은 항상 전일 종가(closePrice) 기준으로 계산
-      const newChange = newPrice - newClosePrice;
-      const newChangePercent = newClosePrice > 0 ? (newChange / newClosePrice) * 100 : 0;
-      
-      // 고가/저가 업데이트 (마켓이 열려있을 때만)
-      const newHigh = marketStatus !== 'closed' ? Math.max(prev.high, newPrice) : prev.high;
-      const newLow = marketStatus !== 'closed' ? Math.min(prev.low, newPrice) : prev.low;
 
+      // 주가 데이터는 변경하지 않고 마켓 상태와 previousMarketClose만 업데이트
       return {
         ...prev,
-        current: newPrice,
-        closePrice: newClosePrice,
         previousMarketClose: newPreviousMarketClose,
-        change: newChange,
-        changePercent: newChangePercent,
-        high: newHigh,
-        low: newLow,
         marketStatus,
-        timestamp: now.toISOString(),
       };
     });
-
-    setLastUpdate(new Date());
   }, [getRandomNews, getRandomMuskPost]);
 
-  // CBOE 데이터를 통한 실시간 주가 가져오기
-  // CBOE는 나스닥과 유사한 데이터를 제공하면서도 더 빠른 업데이트 속도를 제공합니다
-  // CORS/프록시 이슈로 인해 현재 비활성화 (시뮬레이션 데이터 사용)
-  /*
+  // Finnhub API를 통한 실시간 주가 가져오기 (1분마다)
+  // Finnhub는 무료 플랜에서 실시간 주가(L1 데이터)를 제공합니다
   const fetchRealTimePrice = useCallback(async () => {
     try {
-      const priceData = await fetchTSLAPriceFromCBOE();
+      const priceData = await fetchTSLAPriceFromFinnhub();
       if (priceData) {
         setTeslaPrice((prev) => {
-          // 종가는 전일 종가로 고정 (하루 종일 동일)
-          // 새로운 데이터의 종가가 현재 종가와 다르면 (다음 거래일 시작) 업데이트
-          const newClosePrice = prev.closePrice !== priceData.closePrice && 
-                                priceData.closePrice > 0 
-                                ? priceData.closePrice 
-                                : prev.closePrice;
+          const marketStatus = getMarketStatus();
           
-          // previousMarketClose는 마켓 세그먼트 변경 시에만 업데이트 (updateNews에서 처리)
+          // 종가 처리 로직:
+          // 1. 초기 데이터(initialPrice)에서 온 경우 (closePrice가 initial 값과 같음): API에서 받은 종가로 업데이트
+          // 2. 이미 API 데이터로 설정된 경우: 종가는 하루 종일 유지 (변경하지 않음)
+          // 3. 다음 거래일 시작 시 (마켓이 closed에서 premarket로 변경): 새로운 종가로 업데이트
+          const isInitialData = prev.closePrice === initialPrice.closePrice;
+          const isMarketDayChange = prev.marketStatus === 'closed' && marketStatus === 'premarket';
+          
+          let newClosePrice = prev.closePrice;
+          
+          if (isInitialData || isMarketDayChange) {
+            // 초기 로드 또는 새 거래일 시작 시 API에서 받은 종가 사용
+            newClosePrice = priceData.closePrice;
+          }
+          // 그 외에는 기존 종가 유지
+          
+          // previousMarketClose는 마켓 세그먼트 변경 시에만 업데이트
+          let newPreviousMarketClose = prev.previousMarketClose;
+          const prevMarketStatus = prev.marketStatus;
+          
+          if (prevMarketStatus !== marketStatus) {
+            if (prevMarketStatus === 'closed' && marketStatus === 'premarket') {
+              newPreviousMarketClose = prev.closePrice;
+            } else if (prevMarketStatus === 'premarket' && marketStatus === 'daymarket') {
+              newPreviousMarketClose = prev.current;
+            } else if (prevMarketStatus === 'daymarket' && marketStatus === 'aftermarket') {
+              newPreviousMarketClose = prev.current;
+            } else if (prevMarketStatus === 'aftermarket' && marketStatus === 'closed') {
+              newPreviousMarketClose = prev.current;
+            }
+          }
+          
+          // 변동률은 항상 전일 종가(closePrice) 기준으로 계산
+          const newChange = priceData.current - newClosePrice;
+          const newChangePercent = newClosePrice > 0 ? (newChange / newClosePrice) * 100 : 0;
+          
+          // 고가/저가 업데이트 (마켓이 열려있을 때만)
+          const newHigh = marketStatus !== 'closed' ? Math.max(prev.high, priceData.current) : priceData.high;
+          const newLow = marketStatus !== 'closed' ? Math.min(prev.low, priceData.current) : priceData.low;
+
           return {
             ...priceData,
             closePrice: newClosePrice,
-            previousMarketClose: prev.previousMarketClose,
-            marketStatus: getMarketStatus(),
+            previousMarketClose: newPreviousMarketClose,
+            change: newChange,
+            changePercent: newChangePercent,
+            high: newHigh,
+            low: newLow,
+            marketStatus,
           };
         });
         setLastUpdate(new Date());
       }
     } catch (error) {
-      // CBOE API 실패는 조용히 무시 (기존 가격 데이터 유지)
+      // Finnhub API 실패 시 조용히 무시 (기존 가격 데이터 유지)
+      console.error('Finnhub API 호출 실패:', error);
     }
   }, []);
-  */
 
   useEffect(() => {
     // 초기 실행 (컴포넌트 마운트 시 즉시 실행)
     fetchNewsFromAPI(); // NewsAPI/GNews.io에서 초기 뉴스 가져오기
-    updateNews();
-    // CBOE API는 CORS/프록시 이슈로 인해 비활성화 (시뮬레이션 데이터 사용)
-    // fetchRealTimePrice(); // CBOE 데이터로 실시간 주가 가져오기
+    updateNews(); // 시뮬레이션 뉴스 및 트윗 초기 로드
+    fetchRealTimePrice(); // Finnhub API로 실시간 주가 가져오기
     
-    // 주가 업데이트: 시뮬레이션 데이터만 사용 (CBOE API 비활성화)
-    // const priceInterval = setInterval(() => {
-    //   fetchRealTimePrice();
-    // }, 30000);
+    // 주가 업데이트: Finnhub API를 1분마다 호출 (실시간 데이터)
+    const priceInterval = setInterval(() => {
+      fetchRealTimePrice();
+    }, 60000); // 1분마다 업데이트
     
     // 뉴스 업데이트: 1분마다 NewsAPI/GNews.io에서 가져오기
     const newsApiInterval = setInterval(() => {
@@ -389,11 +392,11 @@ export function useNewsUpdate() {
     }, 60000); // 1분마다 체크
 
     return () => {
-      // clearInterval(priceInterval);
+      clearInterval(priceInterval);
       clearInterval(newsApiInterval);
       clearInterval(newsInterval);
     };
-  }, [updateNews, fetchNewsFromAPI]);
+  }, [updateNews, fetchNewsFromAPI, fetchRealTimePrice]);
 
   return {
     newsItems,

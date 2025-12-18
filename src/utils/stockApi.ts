@@ -2,6 +2,87 @@ import { TeslaPrice } from '../types';
 import { getMarketStatus } from './marketStatus';
 
 /**
+ * Finnhub API를 통해 TSLA 실시간 주가 데이터를 가져옵니다
+ * 무료 플랜에서 실시간 주가(L1 데이터)를 제공합니다.
+ * API 키는 환경 변수 VITE_FINNHUB_API_KEY로 설정하거나 직접 입력할 수 있습니다.
+ */
+export async function fetchTSLAPriceFromFinnhub(): Promise<TeslaPrice | null> {
+  try {
+    // Finnhub API 키 (환경 변수에서 가져오기)
+    // @ts-ignore - Vite 환경 변수 타입 정의
+    const FINNHUB_API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+    
+    if (!FINNHUB_API_KEY) {
+      console.warn('Finnhub API Key가 설정되지 않았습니다. 환경 변수 VITE_FINNHUB_API_KEY를 설정해주세요.');
+      return null;
+    }
+
+    const url = `https://finnhub.io/api/v1/quote?symbol=TSLA&token=${FINNHUB_API_KEY}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Finnhub API 응답 구조: { c: current price, h: high, l: low, o: open, pc: previous close, t: timestamp }
+    if (!data || typeof data.c !== 'number') {
+      throw new Error('Invalid data returned from Finnhub API');
+    }
+    
+    const currentPrice = data.c; // Current price (실시간 가격)
+    // pc (previous close)가 없거나 유효하지 않으면 에러 처리 (현재가를 종가로 사용하지 않음)
+    if (typeof data.pc !== 'number' || data.pc <= 0) {
+      throw new Error('Invalid previous close price from Finnhub API');
+    }
+    const previousClose = data.pc; // Previous close price (전일 종가) - 필수값
+    const high = typeof data.h === 'number' && data.h > 0 ? data.h : currentPrice; // High price of the day
+    const low = typeof data.l === 'number' && data.l > 0 ? data.l : currentPrice; // Low price of the day
+    
+    // 디버깅을 위한 로그
+    console.log('✅ [Finnhub API] 실시간 주가 데이터:', {
+      현재가: `$${currentPrice.toFixed(2)}`,
+      전일종가: `$${previousClose.toFixed(2)}`,
+      고가: `$${high.toFixed(2)}`,
+      저가: `$${low.toFixed(2)}`,
+      변동: `${(currentPrice - previousClose) >= 0 ? '+' : ''}${(currentPrice - previousClose).toFixed(2)} (${((currentPrice - previousClose) / previousClose * 100) >= 0 ? '+' : ''}${((currentPrice - previousClose) / previousClose * 100).toFixed(2)}%)`,
+    });
+    
+    // 디버깅을 위한 로그
+    console.log('Finnhub API 응답:', {
+      current: currentPrice,
+      previousClose: previousClose,
+      high: high,
+      low: low,
+      timestamp: data.t
+    });
+    
+    const change = currentPrice - previousClose;
+    const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+    
+    const teslaPrice: TeslaPrice = {
+      current: currentPrice,
+      closePrice: previousClose, // 전일 종가
+      previousMarketClose: previousClose, // 초기값은 전일 종가와 동일
+      change: change,
+      changePercent: changePercent,
+      high: high,
+      low: low,
+      volume: 0, // Finnhub quote API는 volume을 제공하지 않음
+      timestamp: new Date().toISOString(),
+      marketStatus: getMarketStatus(),
+    };
+    
+    return teslaPrice;
+  } catch (error) {
+    console.error('Error fetching TSLA price from Finnhub:', error);
+    return null;
+  }
+}
+
+/**
  * Yahoo Finance API를 통해 TSLA 주가 데이터를 가져옵니다
  * 참고: CORS 문제로 인해 직접 호출이 안될 수 있으므로, 실제 환경에서는 백엔드 프록시나 서버리스 함수를 사용하는 것이 좋습니다.
  */
