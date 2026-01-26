@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Portfolio, Scenario, TeslaPrice } from '../types';
 import { calculatePortfolio } from '../utils/taxCalculator';
 import { formatCurrency, formatPercent } from '../utils/taxCalculator';

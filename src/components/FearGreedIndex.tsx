@@ -1,4 +1,3 @@
-import { FearGreedIndex } from '../types';
 import { fearGreedIndex } from '../data/initialData';
 
 export default function FearGreedIndexComponent() {
@@ -49,7 +48,7 @@ export default function FearGreedIndexComponent() {
       <h2 className="text-xl font-bold text-purple-400 mb-4 flex items-center">
         😱 Fear & Greed 지수
       </h2>
-      
+
       <div className={`p-4 rounded-lg border ${getCategoryBgColor(fearGreedIndex.category)}`}>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -61,7 +60,7 @@ export default function FearGreedIndexComponent() {
             </div>
           </div>
         </div>
-        
+
         {/* 게이지 바 */}
         <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
           <div
@@ -69,18 +68,19 @@ export default function FearGreedIndexComponent() {
             style={{ width: `${fearGreedIndex.value}%` }}
           />
         </div>
-        
+
         <div className="flex justify-between text-xs text-gray-400">
           <span>Extreme Fear (0)</span>
           <span>Neutral (50)</span>
           <span>Extreme Greed (100)</span>
         </div>
       </div>
-      
+
       <div className="mt-3 text-xs text-gray-400">
         테슬라 투자자들의 현재 심리 상태를 나타냅니다.
       </div>
     </div>
   );
 }
+
 

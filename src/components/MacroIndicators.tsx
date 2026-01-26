@@ -1,4 +1,3 @@
-import { MacroIndicator } from '../types';
 import { macroIndicators } from '../data/initialData';
 
 export default function MacroIndicators() {
@@ -29,7 +28,7 @@ export default function MacroIndicators() {
       <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center">
         📊 거시 경제 지표
       </h2>
-      
+
       <div className="grid grid-cols-2 gap-4">
         {macroIndicators.map((indicator, idx) => (
           <div
@@ -58,4 +57,5 @@ export default function MacroIndicators() {
     </div>
   );
 }
+
 

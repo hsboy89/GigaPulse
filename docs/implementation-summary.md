@@ -180,3 +180,4 @@ function simulateScenario(
    - 가상 스크롤 (대량 데이터)
    - 코드 스플리팅
 
+
