@@ -4,7 +4,7 @@ import { newsItems as initialNews, muskPosts as initialMuskPosts, currentTeslaPr
 import { getMarketStatus } from '../utils/marketStatus';
 // CORS/프록시 이슈로 인해 CBOE API 호출 비활성화 (시뮬레이션 데이터 사용)
 // import { fetchTSLAPriceFromCBOE } from '../utils/cboeApi';
-import { fetchTSLAPriceFromFinnhub, fetchTSLANewsFromFinnhub } from '../utils/stockApi';
+import { fetchTSLAPriceFromFinnhub, fetchTSLANewsFromFinnhub, fetchTSLAPriceSimple } from '../utils/stockApi';
 import { fetchAllNewsFromGoogleRSS } from '../utils/googleNewsRss';
 import { fetchAllNewsFromAPI } from '../utils/newsApi';
 
@@ -362,10 +362,15 @@ export function useNewsUpdate() {
   const fetchRealTimePrice = useCallback(async () => {
     try {
       // 주가와 뉴스를 동시에 가져오기
-      const [priceData] = await Promise.all([
-        fetchTSLAPriceFromFinnhub(),
-        fetchNewsFromAPI(), // 주가 업데이트 시점에 뉴스도 함께 갱신
-      ]);
+      let priceData = await fetchTSLAPriceFromFinnhub();
+
+      // Finnhub 실패 시 Yahoo Finance (Simple) 폴백 시도
+      if (!priceData) {
+        console.log('Finnhub API 실패, Yahoo Finance 폴백 시도 중...');
+        priceData = await fetchTSLAPriceSimple();
+      }
+
+      await fetchNewsFromAPI(); // 주가 업데이트 시점에 뉴스도 함께 갱신
 
       if (priceData) {
         setTeslaPrice((prev) => {
