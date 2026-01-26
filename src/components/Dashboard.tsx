@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Header from './Header';
 import MuskFeed from './MuskFeed';
-import TeslaNewsMonitor from './PolicyMonitor';
+import IntelligenceHub from './IntelligenceHub';
 import PortfolioSimulator from './PortfolioSimulator';
 import MacroIndicators from './MacroIndicators';
 import FearGreedIndexComponent from './FearGreedIndex';
@@ -32,9 +32,9 @@ export default function Dashboard() {
             <MuskFeed newsItems={newsItems} sentiment={muskSentiment} />
           </div>
 
-          {/* Center Panel: Tesla News */}
+          {/* Center Panel: AI Intelligence Hub */}
           <div className="lg:col-span-1">
-            <TeslaNewsMonitor newsItems={newsItems} />
+            <IntelligenceHub newsItems={newsItems} teslaPrice={teslaPrice} />
           </div>
 
           {/* Right Panel: Portfolio Simulator */}
