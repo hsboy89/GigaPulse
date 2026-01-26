@@ -43,11 +43,11 @@ export default function Header({ price, lastUpdate }: HeaderProps) {
           </div>
 
           <div className="text-right flex items-center space-x-4">
-            {/* 가격 정보 - 로딩 중이면 '--' 표시 */}
+            {/* 가격 정보 - 로딩 중이면 'Connecting...' 표시 */}
             <div className="text-right">
               <div className="text-2xl font-bold leading-tight">
                 {isLoading ? (
-                  <span className="text-gray-500 animate-pulse">$---.--</span>
+                  <span className="text-gray-500 animate-pulse text-xl">Connecting...</span>
                 ) : (
                   `$${price.current.toFixed(2)}`
                 )}
@@ -61,14 +61,14 @@ export default function Header({ price, lastUpdate }: HeaderProps) {
               {/* 변동률 (%)과 변동 금액 ($) */}
               <div className={`flex items-center justify-end space-x-2 mt-1 ${isLoading ? 'text-gray-500' : colorClass}`}>
                 <div className="text-sm">
-                  {isLoading ? '--.--%' : `${price.changePercent >= 0 ? '+' : ''}${price.changePercent.toFixed(2)}%`}
+                  {isLoading ? 'Waiting...' : `${price.changePercent >= 0 ? '+' : ''}${price.changePercent.toFixed(2)}%`}
                 </div>
                 <div className="text-lg">
-                  {isLoading ? '$--.--' : `${price.change >= 0 ? '+' : ''}$${price.change.toFixed(2)}`}
+                  {isLoading ? '' : `${price.change >= 0 ? '+' : ''}$${price.change.toFixed(2)}`}
                 </div>
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {isLoading ? '고: $--.-- | 저: $--.--' : `고: $${price.high.toFixed(2)} | 저: $${price.low.toFixed(2)}`}
+                {isLoading ? 'Fetching Data...' : `고: $${price.high.toFixed(2)} | 저: $${price.low.toFixed(2)}`}
               </div>
             </div>
           </div>
