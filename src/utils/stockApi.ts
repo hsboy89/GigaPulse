@@ -136,25 +136,27 @@ export async function fetchTSLAPrice(): Promise<TeslaPrice | null> {
 }
 
 /**
- * Yahoo Finance를 통해 TSLA 실시간 주가 데이터를 가져옵니다 (폴백용)
+ * Yahoo Finance v8 chart API를 통해 TSLA 실시간 주가 데이터를 가져옵니다
+ * v7 quote API가 차단되어 v8 chart API로 변경 (2026-01 기준)
  */
 export async function fetchTSLAPriceSimple(): Promise<TeslaPrice | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=TSLA`;
+    // Yahoo Finance v8 chart API (v7 quote API는 Unauthorized 에러 발생)
+    const url = `https://query2.finance.yahoo.com/v8/finance/chart/TSLA?range=1d&interval=1m`;
     const responseData = await fetchWithProxy(url);
 
-    if (!responseData || !responseData.quoteResponse || !responseData.quoteResponse.result || responseData.quoteResponse.result.length === 0) {
+    if (!responseData || !responseData.chart || !responseData.chart.result || responseData.chart.result.length === 0) {
       throw new Error('No data returned from Yahoo Finance');
     }
 
-    const quote = responseData.quoteResponse.result[0];
+    const meta = responseData.chart.result[0].meta;
 
-    // Yahoo Finance는 다양한 필드명을 사용하므로 안전하게 추출
-    const currentPrice = quote.regularMarketPrice || quote.postMarketPrice || quote.preMarketPrice || quote.previousClose || 0;
-    const previousClose = quote.regularMarketPreviousClose || quote.previousClose || currentPrice;
-    const high = quote.regularMarketDayHigh || quote.high || currentPrice;
-    const low = quote.regularMarketDayLow || quote.low || currentPrice;
-    const volume = quote.regularMarketVolume || 0;
+    // v8 chart API의 meta 필드에서 가격 정보 추출
+    const currentPrice = meta.regularMarketPrice || 0;
+    const previousClose = meta.chartPreviousClose || meta.previousClose || currentPrice;
+    const high = meta.regularMarketDayHigh || currentPrice;
+    const low = meta.regularMarketDayLow || currentPrice;
+    const volume = meta.regularMarketVolume || 0;
 
     const change = currentPrice - previousClose;
     const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
@@ -172,13 +174,14 @@ export async function fetchTSLAPriceSimple(): Promise<TeslaPrice | null> {
       marketStatus: getMarketStatus(),
     };
 
-    console.log('✅ Yahoo Finance에서 주가 데이터를 가져왔습니다:', currentPrice);
+    console.log('✅ Yahoo Finance v8에서 주가 데이터를 가져왔습니다:', currentPrice);
     return teslaPrice;
   } catch (error) {
-    console.error('Error fetching TSLA price (simple):', error);
+    console.error('Error fetching TSLA price (Yahoo v8):', error);
     return null;
   }
 }
+
 
 /**
  * Finnhub API를 통해 TSLA 관련 최신 뉴스를 가져옵니다
