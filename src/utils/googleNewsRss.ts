@@ -1,15 +1,5 @@
 import { NewsItem } from '../types';
-
-// 여러 CORS 프록시 URL (fallback 목록)
-// 참고: Google News RSS는 브라우저에서 직접 접근이 제한되므로 프록시가 필요합니다
-// 일부 프록시는 불안정할 수 있으므로 여러 개를 시도합니다
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://corsproxy.io/?',
-  'https://api.codetabs.com/v1/proxy?quest=',
-  'https://thingproxy.freeboard.io/fetch/',
-  'https://cors-anywhere.herokuapp.com/',
-];
+import { fetchWithProxy } from './fetchUtils';
 
 // 카테고리별 Google News RSS 피드 URL
 const RSS_FEEDS = {
@@ -23,76 +13,6 @@ const RSS_FEEDS = {
     'https://nypost.com/tag/elon-musk/feed'
   ]
 };
-
-/**
- * 여러 프록시를 시도하여 RSS 피드를 가져옵니다
- */
-async function fetchWithProxy(url: string): Promise<string> {
-
-  for (let i = 0; i < CORS_PROXIES.length; i++) {
-    const proxy = CORS_PROXIES[i];
-    try {
-      // allorigins.win은 get 엔드포인트를 사용하면 JSON으로 감싸진 응답을 반환
-      let proxyUrl: string;
-      if (proxy.includes('allorigins.win')) {
-        proxyUrl = `${proxy}${encodeURIComponent(url)}`;
-      } else {
-        proxyUrl = `${proxy}${encodeURIComponent(url)}`;
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12초 타임아웃
-
-      const response = await fetch(proxyUrl, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/xml, text/xml, */*',
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      let text: string;
-
-      // allorigins.win의 get 엔드포인트는 JSON으로 감싸진 응답을 반환
-      if (proxy.includes('allorigins.win') && proxy.includes('/get')) {
-        const json = await response.json();
-        text = json.contents || json.content || '';
-      } else {
-        // 다른 프록시는 직접 텍스트 반환
-        const arrayBuffer = await response.arrayBuffer();
-        const decoder = new TextDecoder('utf-8');
-        text = decoder.decode(arrayBuffer);
-      }
-
-      // 응답이 비어있거나 너무 짧으면 다음 프록시 시도
-      if (!text || text.length < 100) {
-        throw new Error('Empty or invalid response');
-      }
-
-      // XML 시작 태그 확인
-      const trimmedText = text.trim();
-      if (!trimmedText.startsWith('<?xml') && !trimmedText.startsWith('<rss')) {
-        throw new Error('Invalid XML response');
-      }
-
-      return text;
-    } catch (error) {
-      // 모든 에러는 조용히 무시하고 다음 프록시 시도
-      // 마지막 프록시가 아니면 조용히 다음 프록시 시도
-      if (i < CORS_PROXIES.length - 1) {
-        continue;
-      }
-    }
-  }
-
-  // 모든 프록시 실패 시 조용히 에러 반환 (호출자가 처리)
-  throw new Error('All proxies failed');
-}
 
 /**
  * XML 문자열을 파싱하여 RSS 아이템을 추출합니다

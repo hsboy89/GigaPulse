@@ -1,6 +1,10 @@
-import { macroIndicators } from '../data/initialData';
+import { MacroIndicator } from '../types';
 
-export default function MacroIndicators() {
+interface MacroIndicatorsProps {
+  indicators: MacroIndicator[];
+}
+
+export default function MacroIndicators({ indicators }: MacroIndicatorsProps) {
   const getTrendColor = (trend: string) => {
     switch (trend) {
       case 'up':
@@ -24,13 +28,13 @@ export default function MacroIndicators() {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 h-full">
       <h2 className="text-xl font-bold text-blue-400 mb-4 flex items-center">
         📊 거시 경제 지표
       </h2>
 
       <div className="grid grid-cols-2 gap-4">
-        {macroIndicators.map((indicator, idx) => (
+        {indicators.map((indicator, idx) => (
           <div
             key={idx}
             className="bg-gray-900 rounded-lg p-3 border border-gray-700"
@@ -39,7 +43,7 @@ export default function MacroIndicators() {
             <div className="flex items-baseline justify-between">
               <div>
                 <span className="text-lg font-bold text-white">
-                  {indicator.value.toFixed(2)}
+                  {indicator.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-xs text-gray-400 ml-1">
                   {indicator.unit}
@@ -57,5 +61,3 @@ export default function MacroIndicators() {
     </div>
   );
 }
-
-

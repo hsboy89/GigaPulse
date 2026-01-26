@@ -9,7 +9,14 @@ import { Portfolio, Scenario } from '../types';
 import { useNewsUpdate } from '../hooks/useNewsUpdate';
 
 export default function Dashboard() {
-  const { newsItems, teslaPrice, lastUpdate, muskSentiment } = useNewsUpdate();
+  const {
+    newsItems,
+    teslaPrice,
+    lastUpdate,
+    muskSentiment,
+    macroIndicators,
+    fearGreedIndex
+  } = useNewsUpdate();
   const [portfolio, setPortfolio] = useState<Portfolio>({
     shares: 10,
     avgPrice: 400,
@@ -50,12 +57,15 @@ export default function Dashboard() {
         </div>
 
         {/* Bottom Section: Additional Indicators */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <MacroIndicators />
-          <FearGreedIndexComponent />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          <div className="lg:col-span-2">
+            <MacroIndicators indicators={macroIndicators} />
+          </div>
+          <div className="lg:col-span-1">
+            <FearGreedIndexComponent index={fearGreedIndex} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

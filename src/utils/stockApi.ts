@@ -1,5 +1,6 @@
-import { TeslaPrice, NewsItem } from '../types';
+import { TeslaPrice, NewsItem, MacroIndicator } from '../types';
 import { getMarketStatus } from './marketStatus';
+import { fetchWithProxy } from './fetchUtils';
 
 /**
  * Finnhub API를 통해 TSLA 실시간 주가 데이터를 가져옵니다
@@ -342,6 +343,50 @@ export async function fetchTSLANewsFromFinnhub(): Promise<NewsItem[]> {
     return newsItems;
   } catch (error) {
     console.error('Error fetching TSLA news from Finnhub:', error);
+    return [];
+  }
+}
+
+/**
+ * 거시 경제 지표(국채 금리, 달러 인덱스, 유가, 비트코인)를 가져옵니다.
+ */
+export async function fetchMacroIndicators(): Promise<MacroIndicator[]> {
+  const symbols = [
+    { symbol: '^TNX', name: '미 10년물 국채 금리', unit: '%' },
+    { symbol: 'DX-Y.NYB', name: '달러 인덱스 (DXY)', unit: '' },
+    { symbol: 'CL=F', name: 'WTI 유가', unit: '$/배럴' },
+    { symbol: 'BTC-USD', name: '비트코인', unit: '$' },
+  ];
+
+  try {
+    const fetchPromises = symbols.map(async (item) => {
+      try {
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${item.symbol}`;
+        const response = await fetchWithProxy(url);
+
+        if (!response || !response.quoteResponse || !response.quoteResponse.result || response.quoteResponse.result.length === 0) {
+          throw new Error(`No data for ${item.symbol}`);
+        }
+
+        const data = response.quoteResponse.result[0];
+        return {
+          name: item.name,
+          value: data.regularMarketPrice,
+          change: data.regularMarketChange,
+          changePercent: data.regularMarketChangePercent,
+          unit: item.unit,
+          trend: data.regularMarketChange >= 0 ? 'up' : 'down',
+        } as MacroIndicator;
+      } catch (error) {
+        console.warn(`Failed to fetch macro indicator ${item.symbol}:`, error);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    return results.filter((item): item is MacroIndicator => item !== null);
+  } catch (error) {
+    console.error('Error fetching macro indicators:', error);
     return [];
   }
 }

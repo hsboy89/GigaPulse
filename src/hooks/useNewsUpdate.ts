@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from 'react';
-import { NewsItem, MuskPost, TeslaPrice } from '../types';
-import { newsItems as initialNews, muskPosts as initialMuskPosts, currentTeslaPrice as initialPrice } from '../data/initialData';
+import { NewsItem, MuskPost, TeslaPrice, MacroIndicator, FearGreedIndex } from '../types';
+import {
+  newsItems as initialNews,
+  muskPosts as initialMuskPosts,
+  currentTeslaPrice as initialPrice,
+  macroIndicators as initialMacro,
+  fearGreedIndex as initialFearGreed
+} from '../data/initialData';
 import { getMarketStatus } from '../utils/marketStatus';
-// CORS/프록시 이슈로 인해 CBOE API 호출 비활성화 (시뮬레이션 데이터 사용)
-// import { fetchTSLAPriceFromCBOE } from '../utils/cboeApi';
-import { fetchTSLAPriceFromFinnhub, fetchTSLANewsFromFinnhub, fetchTSLAPriceSimple } from '../utils/stockApi';
+import { fetchTSLAPriceFromFinnhub, fetchTSLANewsFromFinnhub, fetchTSLAPriceSimple, fetchMacroIndicators } from '../utils/stockApi';
 import { fetchAllNewsFromGoogleRSS } from '../utils/googleNewsRss';
 import { fetchAllNewsFromAPI } from '../utils/newsApi';
+import { fetchFearGreedIndex } from '../utils/sentimentApi';
 
 // 새로운 뉴스를 시뮬레이션하기 위한 풀 (실제로는 API에서 가져올 데이터)
 const newsPool: Omit<NewsItem, 'id' | 'timestamp'>[] = [
@@ -146,6 +151,27 @@ export function useNewsUpdate() {
   const [usedNewsIds, setUsedNewsIds] = useState<Set<string>>(new Set());
   const [usedMuskIds, setUsedMuskIds] = useState<Set<string>>(new Set());
   const [muskSentiment, setMuskSentiment] = useState<{ score: number; label: string }>({ score: 0, label: 'Neutral' });
+  const [macroIndicators, setMacroIndicators] = useState<MacroIndicator[]>(initialMacro);
+  const [fearGreedIndex, setFearGreedIndex] = useState<FearGreedIndex>(initialFearGreed);
+
+  // 거시 경제 지표 및 공포/탐욕 지수 가져오기
+  const fetchMacroAndSentiment = useCallback(async () => {
+    try {
+      const [macroData, sentimentData] = await Promise.all([
+        fetchMacroIndicators(),
+        fetchFearGreedIndex(),
+      ]);
+
+      if (macroData.length > 0) {
+        setMacroIndicators(macroData);
+      }
+
+      setFearGreedIndex(sentimentData);
+      console.log('✅ 거시 경제 및 심리 지수 업데이트 완료');
+    } catch (error) {
+      console.error('거시 경제/심리 지수 가져오기 실패:', error);
+    }
+  }, []);
 
   // 머스크 관련 뉴스 기반 감정 지수 계산
   const calculateMuskSentiment = useCallback((items: NewsItem[]) => {
@@ -453,6 +479,7 @@ export function useNewsUpdate() {
     fetchNewsFromAPI(); // NewsAPI/GNews.io에서 초기 뉴스 가져오기
     updateNews(); // 시뮬레이션 뉴스 및 트윗 초기 로드
     fetchRealTimePrice(); // Finnhub API로 실시간 주가 가져오기
+    fetchMacroAndSentiment(); // 거시 경제 및 심리 지수 가져오기
 
     // 주가 및 뉴스 업데이트: Finnhub API를 30초마다 호출 (실시간 데이터)
     // 주가 업데이트 시점에 뉴스도 함께 갱신
@@ -465,11 +492,17 @@ export function useNewsUpdate() {
       updateNews();
     }, 30000); // 30초마다 체크
 
+    // 거시 경제 및 심리 지수 업데이트: 5분마다 호출 (무료 API 제한 고려)
+    const macroInterval = setInterval(() => {
+      fetchMacroAndSentiment();
+    }, 300000); // 5분마다 업데이트
+
     return () => {
       clearInterval(priceInterval);
       clearInterval(newsInterval);
+      clearInterval(macroInterval);
     };
-  }, [updateNews, fetchNewsFromAPI, fetchRealTimePrice]);
+  }, [updateNews, fetchNewsFromAPI, fetchRealTimePrice, fetchMacroAndSentiment]);
 
   return {
     newsItems,
@@ -477,6 +510,7 @@ export function useNewsUpdate() {
     teslaPrice,
     lastUpdate,
     muskSentiment,
+    macroIndicators,
+    fearGreedIndex,
   };
 }
-
