@@ -17,6 +17,11 @@ const RSS_FEEDS = {
   policy: 'https://news.google.com/rss/search?q=Trump+Economic+Policy+electric+vehicle&hl=en-US&gl=US&ceid=US:en',
   macro: 'https://news.google.com/rss/search?q=Federal+Reserve+interest+rate+stock+market&hl=en-US&gl=US&ceid=US:en',
   musk: 'https://news.google.com/rss/search?q=Elon+Musk+Tesla&hl=en-US&gl=US&ceid=US:en',
+  musk_special: [
+    'https://www.teslarati.com/tag/elon-musk/feed',
+    'https://electrek.co/guides/elon-musk/feed',
+    'https://nypost.com/tag/elon-musk/feed'
+  ]
 };
 
 /**
@@ -131,51 +136,81 @@ function parseRSSXML(xmlString: string): Array<{ title: string; description: str
  */
 export async function fetchNewsFromGoogleRSS(category: 'tesla' | 'policy' | 'macro' | 'musk'): Promise<NewsItem[]> {
   try {
-    const feedUrl = RSS_FEEDS[category];
-    const xmlText = await fetchWithProxy(feedUrl);
-    const items = parseRSSXML(xmlText);
+    const feedsToFetch: string[] = [];
 
-    if (items.length === 0) {
+    if (category === 'musk') {
+      feedsToFetch.push(RSS_FEEDS.musk);
+      if ((RSS_FEEDS as any).musk_special) {
+        feedsToFetch.push(...(RSS_FEEDS as any).musk_special);
+      }
+    } else {
+      feedsToFetch.push(RSS_FEEDS[category]);
+    }
+
+    const allFetchedItems: any[] = [];
+
+    // 병렬로 모든 피드 가져오기
+    const fetchPromises = feedsToFetch.map(async (url) => {
+      try {
+        const xmlText = await fetchWithProxy(url);
+        return parseRSSXML(xmlText);
+      } catch (error) {
+        console.warn(`Failed to fetch RSS from ${url}:`, error);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    results.forEach(items => allFetchedItems.push(...items));
+
+    if (allFetchedItems.length === 0) {
       return [];
     }
 
-    // 최신 5개만 가져오기
-    const newsItems = items.slice(0, 5).map((item, index) => {
-      // 제목에서 HTML 태그 제거
-      const title = item.title.replace(/<[^>]*>/g, '').trim() || 'No title';
+    // 중복 제거 (제목 기준)
+    const uniqueItems = Array.from(new Map(allFetchedItems.map(item => [item.title, item])).values());
 
-      // 설명에서 HTML 태그 제거 및 요약
-      let content = item.description.replace(/<[^>]*>/g, '').trim();
+    // 최신 순으로 정렬 후 상위 10개만 가져오기 (머스크는 더 많이 가져옴)
+    const limit = category === 'musk' ? 15 : 5;
+    const newsItems = uniqueItems
+      .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+      .slice(0, limit)
+      .map((item, index) => {
+        // 제목에서 HTML 태그 제거
+        const title = item.title.replace(/<[^>]*>/g, '').trim() || 'No title';
 
-      // 내용이 너무 길면 자르기
-      if (content.length > 200) {
-        content = content.substring(0, 200) + '...';
-      }
+        // 설명에서 HTML 태그 제거 및 요약
+        let content = item.description.replace(/<[^>]*>/g, '').trim();
 
-      // pubDate를 ISO 형식으로 변환
-      let pubDate: string;
-      try {
-        pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
-      } catch {
-        pubDate = new Date().toISOString();
-      }
+        // 내용이 너무 길면 자르기
+        if (content.length > 200) {
+          content = content.substring(0, 200) + '...';
+        }
 
-      // 감정 분석 (간단한 키워드 기반)
-      const sentiment = analyzeSentiment(title + ' ' + content);
+        // pubDate를 ISO 형식으로 변환
+        let pubDate: string;
+        try {
+          pubDate = item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString();
+        } catch {
+          pubDate = new Date().toISOString();
+        }
 
-      // 영향도 계산 (간단한 키워드 기반)
-      const impact = calculateImpact(title + ' ' + content, category);
+        // 감정 분석 (간단한 키워드 기반)
+        const sentiment = analyzeSentiment(title + ' ' + content);
 
-      return {
-        id: `${category}-${Date.now()}-${index}`,
-        title,
-        content: content || title, // 내용이 없으면 제목 사용
-        category,
-        timestamp: pubDate,
-        sentiment,
-        impact,
-      } as NewsItem;
-    });
+        // 영향도 계산 (간단한 키워드 기반)
+        const impact = calculateImpact(title + ' ' + content, category);
+
+        return {
+          id: `${category}-${Date.now()}-${index}`,
+          title,
+          content: content || title, // 내용이 없으면 제목 사용
+          category,
+          timestamp: pubDate,
+          sentiment,
+          impact,
+        } as NewsItem;
+      });
 
     return newsItems;
   } catch (error) {

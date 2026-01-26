@@ -138,27 +138,53 @@ export function useNewsUpdate() {
   const sortedInitialMuskPosts = [...initialMuskPosts].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
-  
+
   const [newsItems, setNewsItems] = useState<NewsItem[]>(sortedInitialNews);
   const [muskPosts, setMuskPosts] = useState<MuskPost[]>(sortedInitialMuskPosts);
   const [teslaPrice, setTeslaPrice] = useState<TeslaPrice>(initialPrice);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [usedNewsIds, setUsedNewsIds] = useState<Set<string>>(new Set());
   const [usedMuskIds, setUsedMuskIds] = useState<Set<string>>(new Set());
+  const [muskSentiment, setMuskSentiment] = useState<{ score: number; label: string }>({ score: 0, label: 'Neutral' });
+
+  // 머스크 관련 뉴스 기반 감정 지수 계산
+  const calculateMuskSentiment = useCallback((items: NewsItem[]) => {
+    const muskNews = items.filter(item =>
+      item.category === 'musk' ||
+      item.title.toLowerCase().includes('musk') ||
+      item.title.toLowerCase().includes('elon')
+    );
+
+    if (muskNews.length === 0) return { score: 0, label: 'Neutral' };
+
+    const totalImpact = muskNews.reduce((acc, item) => acc + item.impact, 0);
+    const avgImpact = totalImpact / muskNews.length;
+
+    // -100 ~ 100 범위를 0 ~ 100 범위로 변환 (게이지용)
+    const score = Math.round(((avgImpact + 100) / 200) * 100);
+
+    let label = 'Neutral';
+    if (avgImpact > 20) label = 'Very Positive';
+    else if (avgImpact > 5) label = 'Positive';
+    else if (avgImpact < -20) label = 'Very Negative';
+    else if (avgImpact < -5) label = 'Negative';
+
+    return { score, label };
+  }, []);
 
   const getRandomNews = useCallback((): NewsItem | null => {
     const availableIndices = newsPool
       .map((_, idx) => idx)
       .filter(idx => !usedNewsIds.has(`news-${idx}`));
-    
+
     if (availableIndices.length === 0) {
       setUsedNewsIds(new Set());
       return null;
     }
-    
+
     const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
     const news = newsPool[randomIdx];
-    
+
     return {
       ...news,
       id: `news-${Date.now()}-${randomIdx}`,
@@ -170,15 +196,15 @@ export function useNewsUpdate() {
     const availableIndices = muskPostPool
       .map((_, idx) => idx)
       .filter(idx => !usedMuskIds.has(`musk-${idx}`));
-    
+
     if (availableIndices.length === 0) {
       setUsedMuskIds(new Set());
       return null;
     }
-    
+
     const randomIdx = availableIndices[Math.floor(Math.random() * availableIndices.length)];
     const post = muskPostPool[randomIdx];
-    
+
     return {
       ...post,
       id: `musk-${Date.now()}-${randomIdx}`,
@@ -191,15 +217,18 @@ export function useNewsUpdate() {
     try {
       // Finnhub News API에서 테슬라 뉴스 가져오기 (우선순위 1)
       const finnhubNews = await fetchTSLANewsFromFinnhub();
-      
+
       if (finnhubNews.length > 0) {
         setNewsItems((prev) => {
           const existingIds = new Set(prev.map(item => item.id));
           const newUniqueNews = finnhubNews.filter(item => !existingIds.has(item.id));
           const updated = [...newUniqueNews, ...prev];
-          return updated
+          const finalNews = updated
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 20);
+            .slice(0, 30);
+
+          setMuskSentiment(calculateMuskSentiment(finalNews));
+          return finalNews;
         });
         setLastUpdate(new Date());
         return;
@@ -207,15 +236,18 @@ export function useNewsUpdate() {
 
       // Finnhub 실패 시 NewsAPI/GNews.io 시도 (fallback)
       const apiNews = await fetchAllNewsFromAPI();
-      
+
       if (apiNews.length > 0) {
         setNewsItems((prev) => {
           const existingTitles = new Set(prev.map(item => item.title.toLowerCase()));
           const newUniqueNews = apiNews.filter(item => !existingTitles.has(item.title.toLowerCase()));
           const updated = [...newUniqueNews, ...prev];
-          return updated
+          const finalNews = updated
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 20);
+            .slice(0, 30);
+
+          setMuskSentiment(calculateMuskSentiment(finalNews));
+          return finalNews;
         });
         setLastUpdate(new Date());
         return;
@@ -228,9 +260,12 @@ export function useNewsUpdate() {
           const existingTitles = new Set(prev.map(item => item.title.toLowerCase()));
           const newUniqueNews = rssNews.filter(item => !existingTitles.has(item.title.toLowerCase()));
           const updated = [...newUniqueNews, ...prev];
-          return updated
+          const finalNews = updated
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 20);
+            .slice(0, 30);
+
+          setMuskSentiment(calculateMuskSentiment(finalNews));
+          return finalNews;
         });
         setLastUpdate(new Date());
       }
@@ -238,12 +273,12 @@ export function useNewsUpdate() {
       console.error('뉴스 가져오기 실패:', error);
       // 에러는 조용히 무시 (기존 데이터 계속 사용)
     }
-  }, []);
+  }, [calculateMuskSentiment]);
 
   const updateNews = useCallback(() => {
     // NewsAPI/GNews.io에서 뉴스 가져오기 (주기적으로 업데이트)
     fetchNewsFromAPI();
-    
+
     // 기존 시뮬레이션 방식은 백업으로 유지 (RSS 실패 시)
     if (Math.random() < 0.1) {
       const newNews = getRandomNews();
@@ -251,9 +286,12 @@ export function useNewsUpdate() {
         setNewsItems((prev) => {
           // 최신 순으로 정렬 (timestamp 기준 내림차순)
           const updated = [newNews, ...prev];
-          return updated
+          const finalNews = updated
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 20); // 최대 20개 유지
+            .slice(0, 30);
+
+          setMuskSentiment(calculateMuskSentiment(finalNews));
+          return finalNews;
         });
         // ID에서 poolIdx 추출 (news-timestamp-poolIdx 형식)
         const parts = newNews.id.split('-');
@@ -294,10 +332,10 @@ export function useNewsUpdate() {
       const now = new Date();
       const marketStatus = getMarketStatus(now);
       const prevMarketStatus = prev.marketStatus;
-      
+
       // 마켓 세그먼트가 변경되었을 때 이전 세그먼트 종료 가격 저장만 처리
       let newPreviousMarketClose = prev.previousMarketClose;
-      
+
       if (prevMarketStatus !== marketStatus) {
         if (prevMarketStatus === 'closed' && marketStatus === 'premarket') {
           newPreviousMarketClose = prev.closePrice;
@@ -317,9 +355,9 @@ export function useNewsUpdate() {
         marketStatus,
       };
     });
-  }, [getRandomNews, getRandomMuskPost]);
+  }, [getRandomNews, getRandomMuskPost, fetchNewsFromAPI, calculateMuskSentiment]);
 
-  // Finnhub API를 통한 실시간 주가 및 뉴스 가져오기 (1분마다)
+  // Finnhub API를 통한 실시간 주가 및 뉴스 가져오기 (30초마다)
   // Finnhub는 무료 플랜에서 실시간 주가(L1 데이터)와 뉴스를 제공합니다
   const fetchRealTimePrice = useCallback(async () => {
     try {
@@ -328,23 +366,23 @@ export function useNewsUpdate() {
         fetchTSLAPriceFromFinnhub(),
         fetchNewsFromAPI(), // 주가 업데이트 시점에 뉴스도 함께 갱신
       ]);
-      
+
       if (priceData) {
         setTeslaPrice((prev) => {
           const marketStatus = getMarketStatus();
-          
+
           // 종가 처리 로직:
           // 1. 초기 데이터(initialPrice)에서 온 경우: 항상 API에서 받은 종가로 업데이트
           // 2. 다음 거래일 시작 시 (마켓이 closed에서 premarket로 변경): 새로운 종가로 업데이트
           // 3. 그 외: 종가는 하루 종일 유지 (변경하지 않음)
           const isInitialData = Math.abs(prev.closePrice - initialPrice.closePrice) < 0.01; // 부동소수점 비교
           const isMarketDayChange = prev.marketStatus === 'closed' && marketStatus === 'premarket';
-          
+
           // 초기 로드이거나 새 거래일 시작 시 API 종가 사용, 그 외에는 기존 종가 유지
-          const newClosePrice = (isInitialData || isMarketDayChange) 
-            ? priceData.closePrice 
+          const newClosePrice = (isInitialData || isMarketDayChange)
+            ? priceData.closePrice
             : prev.closePrice;
-          
+
           // 디버깅: 종가 업데이트 확인
           if (isInitialData && newClosePrice !== prev.closePrice) {
             console.log('✅ 종가 업데이트:', {
@@ -353,11 +391,11 @@ export function useNewsUpdate() {
               'API 데이터': priceData.closePrice
             });
           }
-          
+
           // previousMarketClose는 마켓 세그먼트 변경 시에만 업데이트
           let newPreviousMarketClose = prev.previousMarketClose;
           const prevMarketStatus = prev.marketStatus;
-          
+
           if (prevMarketStatus !== marketStatus) {
             if (prevMarketStatus === 'closed' && marketStatus === 'premarket') {
               newPreviousMarketClose = prev.closePrice;
@@ -369,17 +407,17 @@ export function useNewsUpdate() {
               newPreviousMarketClose = prev.current;
             }
           }
-          
+
           // 변동률은 항상 전일 종가(closePrice) 기준으로 계산
           const newChange = priceData.current - newClosePrice;
           const newChangePercent = newClosePrice > 0 ? (newChange / newClosePrice) * 100 : 0;
-          
+
           // 고가/저가 업데이트
           // 초기 로드 시: API에서 받은 값 사용
           // 이후: 마켓이 열려있으면 누적, 닫혀있으면 API 값 사용
           let newHigh = priceData.high;
           let newLow = priceData.low;
-          
+
           if (!isInitialData && marketStatus !== 'closed') {
             // 이미 API 데이터가 있고 마켓이 열려있으면 누적
             newHigh = Math.max(prev.high, priceData.current);
@@ -403,24 +441,24 @@ export function useNewsUpdate() {
       // Finnhub API 실패 시 조용히 무시 (기존 가격 데이터 유지)
       console.error('Finnhub API 호출 실패:', error);
     }
-  }, []);
+  }, [fetchNewsFromAPI]);
 
   useEffect(() => {
     // 초기 실행 (컴포넌트 마운트 시 즉시 실행)
     fetchNewsFromAPI(); // NewsAPI/GNews.io에서 초기 뉴스 가져오기
     updateNews(); // 시뮬레이션 뉴스 및 트윗 초기 로드
     fetchRealTimePrice(); // Finnhub API로 실시간 주가 가져오기
-    
-    // 주가 및 뉴스 업데이트: Finnhub API를 1분마다 호출 (실시간 데이터)
+
+    // 주가 및 뉴스 업데이트: Finnhub API를 30초마다 호출 (실시간 데이터)
     // 주가 업데이트 시점에 뉴스도 함께 갱신
     const priceInterval = setInterval(() => {
       fetchRealTimePrice(); // 주가와 뉴스를 함께 업데이트
-    }, 60000); // 1분마다 업데이트
-    
-    // 뉴스 및 트윗 업데이트: 1분마다 체크 (시뮬레이션 백업)
+    }, 30000); // 30초마다 업데이트
+
+    // 뉴스 및 트윗 업데이트: 30초마다 체크 (시뮬레이션 백업)
     const newsInterval = setInterval(() => {
       updateNews();
-    }, 60000); // 1분마다 체크
+    }, 30000); // 30초마다 체크
 
     return () => {
       clearInterval(priceInterval);
@@ -433,6 +471,7 @@ export function useNewsUpdate() {
     muskPosts,
     teslaPrice,
     lastUpdate,
+    muskSentiment,
   };
 }
 
