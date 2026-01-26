@@ -4,7 +4,6 @@ export const CORS_PROXIES = [
     'https://corsproxy.io/?',
     'https://api.codetabs.com/v1/proxy?quest=',
     'https://thingproxy.freeboard.io/fetch/',
-    'https://cors-anywhere.herokuapp.com/',
 ];
 
 /**
@@ -16,24 +15,35 @@ export async function fetchWithProxy(url: string): Promise<any> {
         try {
             const proxyUrl = `${proxy}${encodeURIComponent(url)}`;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 12000); // 12초 타임아웃
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 타임아웃
 
             const response = await fetch(proxyUrl, {
                 signal: controller.signal,
                 headers: {
-                    'Accept': 'application/json, application/xml, text/xml, */*',
+                    'Accept': 'application/json, */*',
                 },
             });
 
             clearTimeout(timeoutId);
 
-            if (!response.ok) continue;
+            if (!response.ok) {
+                console.warn(`Proxy ${proxy} returned status ${response.status}`);
+                continue;
+            }
 
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-                return await response.json();
-            } else {
-                return await response.text();
+            const text = await response.text();
+
+            // JSON 파싱 시도 (Yahoo Finance API는 항상 JSON을 반환)
+            try {
+                const json = JSON.parse(text);
+                console.log(`✅ 프록시 ${proxy} 성공`);
+                return json;
+            } catch {
+                // JSON이 아닌 경우 텍스트 반환 (RSS 등)
+                if (text.length > 100) {
+                    return text;
+                }
+                continue;
             }
         } catch (error) {
             console.warn(`Proxy ${proxy} failed for ${url}:`, error);

@@ -399,72 +399,43 @@ export function useNewsUpdate() {
       await fetchNewsFromAPI(); // 주가 업데이트 시점에 뉴스도 함께 갱신
 
       if (priceData) {
+        console.log('📊 실시간 주가 수신:', priceData.current);
         setTeslaPrice((prev) => {
           const marketStatus = getMarketStatus();
 
-          // 종가 처리 로직:
-          // 1. 초기 데이터(initialPrice)에서 온 경우: 항상 API에서 받은 종가로 업데이트
-          // 2. 다음 거래일 시작 시 (마켓이 closed에서 premarket로 변경): 새로운 종가로 업데이트
-          // 3. 그 외: 종가는 하루 종일 유지 (변경하지 않음)
-          const isInitialData = Math.abs(prev.closePrice - initialPrice.closePrice) < 0.01; // 부동소수점 비교
+          // 초기 데이터 여부 확인
+          const isInitialData = Math.abs(prev.closePrice - initialPrice.closePrice) < 0.01;
           const isMarketDayChange = prev.marketStatus === 'closed' && marketStatus === 'premarket';
 
-          // 초기 로드이거나 새 거래일 시작 시 API 종가 사용, 그 외에는 기존 종가 유지
+          // 종가(기준가) 업데이트: 초기 로드이거나 날짜가 바뀐 경우에만 API의 종가 사용
           const newClosePrice = (isInitialData || isMarketDayChange)
             ? priceData.closePrice
             : prev.closePrice;
 
-          // 디버깅: 종가 업데이트 확인
-          if (isInitialData && newClosePrice !== prev.closePrice) {
-            console.log('✅ 종가 업데이트:', {
-              '기존 종가 (초기값)': prev.closePrice,
-              '새 종가 (API)': newClosePrice,
-              'API 데이터': priceData.closePrice
-            });
-          }
-
-          // previousMarketClose는 마켓 세그먼트 변경 시에만 업데이트
-          let newPreviousMarketClose = prev.previousMarketClose;
-          const prevMarketStatus = prev.marketStatus;
-
-          if (prevMarketStatus !== marketStatus) {
-            if (prevMarketStatus === 'closed' && marketStatus === 'premarket') {
-              newPreviousMarketClose = prev.closePrice;
-            } else if (prevMarketStatus === 'premarket' && marketStatus === 'daymarket') {
-              newPreviousMarketClose = prev.current;
-            } else if (prevMarketStatus === 'daymarket' && marketStatus === 'aftermarket') {
-              newPreviousMarketClose = prev.current;
-            } else if (prevMarketStatus === 'aftermarket' && marketStatus === 'closed') {
-              newPreviousMarketClose = prev.current;
-            }
-          }
-
-          // 변동률은 항상 전일 종가(closePrice) 기준으로 계산
+          // 변동액 및 변동률 재계산 (기준가 대비)
           const newChange = priceData.current - newClosePrice;
           const newChangePercent = newClosePrice > 0 ? (newChange / newClosePrice) * 100 : 0;
 
           // 고가/저가 업데이트
-          // 초기 로드 시: API에서 받은 값 사용
-          // 이후: 마켓이 열려있으면 누적, 닫혀있으면 API 값 사용
           let newHigh = priceData.high;
           let newLow = priceData.low;
 
           if (!isInitialData && marketStatus !== 'closed') {
-            // 이미 API 데이터가 있고 마켓이 열려있으면 누적
             newHigh = Math.max(prev.high, priceData.current);
             newLow = Math.min(prev.low, priceData.current);
           }
 
-          return {
+          const updatedPrice = {
             ...priceData,
             closePrice: newClosePrice,
-            previousMarketClose: newPreviousMarketClose,
             change: newChange,
             changePercent: newChangePercent,
             high: newHigh,
             low: newLow,
             marketStatus,
           };
+
+          return updatedPrice;
         });
         setLastUpdate(new Date());
       }

@@ -136,62 +136,24 @@ export async function fetchTSLAPrice(): Promise<TeslaPrice | null> {
 }
 
 /**
- * 간단한 폴백 방법: Yahoo Finance의 간단한 쿼리
- * 이 방법은 더 안정적이지만 데이터가 제한적일 수 있습니다
+ * Yahoo Finance를 통해 TSLA 실시간 주가 데이터를 가져옵니다 (폴백용)
  */
 export async function fetchTSLAPriceSimple(): Promise<TeslaPrice | null> {
   try {
-    // 여러 CORS 프록시 시도 (fallback 방식)
-    const proxies = [
-      'https://api.allorigins.win/raw?url=',
-      'https://corsproxy.io/?',
-      'https://api.codetabs.com/v1/proxy?quest=',
-      'https://thingproxy.freeboard.io/fetch/',
-      'https://cors-anywhere.herokuapp.com/',
-    ];
-
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=TSLA`;
-    let data: any = null;
-    let lastError: Error | null = null;
+    const responseData = await fetchWithProxy(url);
 
-    // 각 프록시를 순차적으로 시도
-    for (const proxy of proxies) {
-      try {
-        const proxyUrl = proxy + encodeURIComponent(url);
-        const response = await fetch(proxyUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          continue; // 다음 프록시 시도
-        }
-
-        const responseData = await response.json();
-
-        // 응답이 올바른 구조인지 확인
-        if (responseData && responseData.quoteResponse && responseData.quoteResponse.result && responseData.quoteResponse.result.length > 0) {
-          data = responseData;
-          break; // 성공적으로 데이터를 가져왔으므로 루프 종료
-        }
-      } catch (error) {
-        lastError = error as Error;
-        continue; // 다음 프록시 시도
-      }
+    if (!responseData || !responseData.quoteResponse || !responseData.quoteResponse.result || responseData.quoteResponse.result.length === 0) {
+      throw new Error('No data returned from Yahoo Finance');
     }
 
-    if (!data) {
-      console.error('All proxy attempts failed. Last error:', lastError);
-      throw new Error('No data returned from API - all proxies failed');
-    }
+    const quote = responseData.quoteResponse.result[0];
 
-    const quote = data.quoteResponse.result[0];
-    const currentPrice = quote.regularMarketPrice || quote.previousClose || 0;
+    // Yahoo Finance는 다양한 필드명을 사용하므로 안전하게 추출
+    const currentPrice = quote.regularMarketPrice || quote.postMarketPrice || quote.preMarketPrice || quote.previousClose || 0;
     const previousClose = quote.regularMarketPreviousClose || quote.previousClose || currentPrice;
-    const high = quote.regularMarketDayHigh || previousClose;
-    const low = quote.regularMarketDayLow || previousClose;
+    const high = quote.regularMarketDayHigh || quote.high || currentPrice;
+    const low = quote.regularMarketDayLow || quote.low || currentPrice;
     const volume = quote.regularMarketVolume || 0;
 
     const change = currentPrice - previousClose;
@@ -210,6 +172,7 @@ export async function fetchTSLAPriceSimple(): Promise<TeslaPrice | null> {
       marketStatus: getMarketStatus(),
     };
 
+    console.log('✅ Yahoo Finance에서 주가 데이터를 가져왔습니다:', currentPrice);
     return teslaPrice;
   } catch (error) {
     console.error('Error fetching TSLA price (simple):', error);
