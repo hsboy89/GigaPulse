@@ -24,19 +24,19 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Header price={teslaPrice} lastUpdate={lastUpdate} />
-      
+
       <div className="w-full px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           {/* Left Panel: Elon Musk Feed */}
           <div className="lg:col-span-1">
-            <MuskFeed />
+            <MuskFeed newsItems={newsItems} />
           </div>
-          
+
           {/* Center Panel: Tesla News */}
           <div className="lg:col-span-1">
             <TeslaNewsMonitor newsItems={newsItems} />
           </div>
-          
+
           {/* Right Panel: Portfolio Simulator */}
           <div className="lg:col-span-1">
             <PortfolioSimulator
@@ -48,7 +48,7 @@ export default function Dashboard() {
             />
           </div>
         </div>
-        
+
         {/* Bottom Section: Additional Indicators */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
           <MacroIndicators />

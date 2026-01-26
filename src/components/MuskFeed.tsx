@@ -1,130 +1,94 @@
-import { useEffect, useRef } from 'react';
+import { NewsItem } from '../types';
 
-export default function MuskFeed() {
-  const widgetRef = useRef<HTMLDivElement>(null);
-  const widgetLoadedRef = useRef<boolean>(false); // 위젯이 이미 로드되었는지 추적
+interface MuskFeedProps {
+  newsItems: NewsItem[];
+}
 
-  // X 위젯 로드 함수 (최신 트윗을 위해 매번 새로 생성)
-  const loadTwitterWidget = (forceRefresh = false) => {
-    if (!window.twttr || !widgetRef.current) return;
+export default function MuskFeed({ newsItems }: MuskFeedProps) {
+  // Musk 관련 뉴스만 필터링
+  const muskNews = newsItems.filter(item =>
+    item.category === 'musk' ||
+    item.title.toLowerCase().includes('musk') ||
+    item.title.toLowerCase().includes('elon')
+  );
 
-    // 위젯 생성 함수
-    const createWidget = () => {
-      if (!window.twttr || !widgetRef.current) return;
-
-      window.twttr.widgets
-        .createTimeline(
-          {
-            sourceType: 'profile',
-            screenName: 'elonmusk',
-            height: 600,
-            width: '100%',
-            theme: 'dark',
-            tweetLimit: 20,
-            chrome: 'noheader nofooter', // 헤더/푸터 제거로 더 많은 트윗 표시
-          } as any,
-          widgetRef.current
-        )
-        .then(() => {
-          widgetLoadedRef.current = true;
-          console.log('✅ X 위젯 로드 완료 - 최신 트윗 표시 중', new Date().toLocaleTimeString());
-        })
-        .catch((err: Error) => {
-          console.error('X widget 로드 실패:', err);
-          // 429 에러인 경우 사용자에게 안내 메시지 표시
-          if (err.message.includes('429') || err.message.includes('Too Many Requests')) {
-            if (widgetRef.current) {
-              widgetRef.current.innerHTML = `
-                <div class="p-4 text-center text-gray-400">
-                  <p class="mb-2">X 피드를 불러오는 데 너무 많은 요청이 발생했습니다.</p>
-                  <p class="text-sm">잠시 후 새로고침해주세요.</p>
-                  <a href="https://x.com/elonmusk" target="_blank" rel="noopener noreferrer" 
-                     class="mt-4 inline-block px-4 py-2 bg-tesla-red text-white rounded hover:bg-red-700">
-                    Elon Musk의 X 프로필 보기
-                  </a>
-                </div>
-              `;
-            }
-          }
-        });
-    };
-
-    // 기존 위젯이 있으면 완전히 제거 (최신 트윗을 위해)
-    if (forceRefresh && widgetRef.current.innerHTML) {
-      // 모든 자식 요소 제거
-      while (widgetRef.current.firstChild) {
-        widgetRef.current.removeChild(widgetRef.current.firstChild);
-      }
-      widgetRef.current.innerHTML = '';
-      widgetLoadedRef.current = false;
-      
-      // DOM 정리 시간을 확보한 후 새 위젯 생성
-      setTimeout(createWidget, 150);
-    } else {
-      // 초기 로드 시 즉시 생성
-      createWidget();
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return 'text-tesla-green';
+      case 'negative': return 'text-red-400';
+      default: return 'text-gray-400';
     }
   };
 
-  // 초기 위젯 로드
-  useEffect(() => {
-    // X (Twitter) Widgets JS가 로드될 때까지 대기
-    const initWidget = () => {
-      if (window.twttr && window.twttr.widgets) {
-        loadTwitterWidget();
-      } else {
-        // widgets.js 로드를 기다림
-        let checkCount = 0;
-        const maxChecks = 50; // 최대 5초 (100ms * 50)
-        
-        const checkInterval = setInterval(() => {
-          checkCount++;
-          if (window.twttr && window.twttr.widgets) {
-            clearInterval(checkInterval);
-            loadTwitterWidget();
-          } else if (checkCount >= maxChecks) {
-            clearInterval(checkInterval);
-            console.warn('X widgets.js 로드 타임아웃');
-          }
-        }, 100);
-      }
-    };
-
-    initWidget();
-  }, []);
-
-  // 1분마다 위젯 새로고침 (주가 업데이트와 동기화)
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      if (window.twttr && widgetRef.current) {
-        // 위젯을 강제로 새로고침하여 최신 트윗 가져오기
-        // forceRefresh=true로 설정하여 기존 위젯을 완전히 제거하고 새로 생성
-        console.log('🔄 X 위젯 새로고침 중... (최신 트윗 가져오기)', new Date().toLocaleTimeString());
-        loadTwitterWidget(true);
-      }
-    }, 60000); // 1분마다 새로고침 (주가 업데이트와 동기화)
-
-    return () => clearInterval(refreshInterval);
-  }, []);
+  const getSentimentBg = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return 'bg-tesla-green/10 border-tesla-green/30';
+      case 'negative': return 'bg-red-400/10 border-red-400/30';
+      default: return 'bg-gray-700/30 border-gray-600/30';
+    }
+  };
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-full flex flex-col" style={{ maxHeight: 'calc(100vh - 250px)' }}>
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h2 className="text-xl font-bold text-tesla-red flex items-center">
-          🚀 Elon's X Feed
+          🚀 Elon's Intelligence
         </h2>
-        <span className="text-xs text-gray-400">실시간</span>
+        <span className="text-xs text-gray-400">실시간 뉴스 기반</span>
       </div>
-      
-      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-        {/* X (Twitter) Embed Widget - Elon Musk 타임라인 */}
-        <div 
-          ref={widgetRef} 
-          className="flex-1 min-h-[600px]"
-          style={{ minHeight: '600px' }}
-        />
+
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-4 pr-1 custom-scrollbar">
+        {muskNews.length > 0 ? (
+          muskNews.map((news) => (
+            <div
+              key={news.id}
+              className={`p-4 rounded-lg border transition-all hover:bg-gray-700/50 ${getSentimentBg(news.sentiment)}`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${getSentimentBg(news.sentiment)} ${getSentimentColor(news.sentiment)}`}>
+                  {news.sentiment}
+                </span>
+                <span className="text-[10px] text-gray-500">
+                  {new Date(news.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white mb-2 leading-snug">
+                {news.title}
+              </h3>
+              <p className="text-xs text-gray-400 line-clamp-3 leading-relaxed">
+                {news.content}
+              </p>
+              <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] text-gray-500">Impact:</span>
+                  <div className="w-16 h-1 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${news.impact >= 0 ? 'bg-tesla-green' : 'bg-red-400'}`}
+                      style={{ width: `${Math.abs(news.impact)}%` }}
+                    />
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold ${news.impact >= 0 ? 'text-tesla-green' : 'text-red-400'}`}>
+                  {news.impact >= 0 ? '+' : ''}{news.impact}%
+                </span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500 space-y-4">
+            <div className="animate-pulse text-4xl">📡</div>
+            <p className="text-sm">머스크 관련 뉴스를 수집 중입니다...</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-gray-700 flex-shrink-0">
+        <div className="bg-gray-900/50 rounded p-3 text-[11px] text-gray-400 italic">
+          "X(Twitter) 위젯 대신 실시간 뉴스 API를 통해 일론 머스크의 행보와 시장 영향을 분석합니다."
+        </div>
       </div>
     </div>
   );
 }
+
 

@@ -4,9 +4,11 @@ import { NewsItem } from '../types';
 // 참고: Google News RSS는 브라우저에서 직접 접근이 제한되므로 프록시가 필요합니다
 // 일부 프록시는 불안정할 수 있으므로 여러 개를 시도합니다
 const CORS_PROXIES = [
+  'https://api.allorigins.win/raw?url=',
   'https://corsproxy.io/?',
-  'https://api.allorigins.win/get?url=',
   'https://api.codetabs.com/v1/proxy?quest=',
+  'https://thingproxy.freeboard.io/fetch/',
+  'https://cors-anywhere.herokuapp.com/',
 ];
 
 // 카테고리별 Google News RSS 피드 URL
