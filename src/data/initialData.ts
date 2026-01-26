@@ -1,22 +1,21 @@
 import { TeslaPrice, NewsItem, MuskPost, MacroIndicator, FearGreedIndex } from '../types';
 import { getMarketStatus } from '../utils/marketStatus';
 
-// 전일 종가 (하루 종일 고정) - TradingView 위젯과 동기화 필요
-const baseClosePrice = 467.00; // 실제 전일 종가 (TradingView 기준)
-const initialCurrentPrice = 467.00; // 초기 현재가 (시뮬레이션용, 종가와 동일하게 시작)
-
+// 초기값은 0으로 설정 (로딩 중 상태를 표시하기 위함)
+// API에서 실제 데이터를 가져온 후 업데이트됨
 export const currentTeslaPrice: TeslaPrice = {
-  current: initialCurrentPrice,
-  closePrice: baseClosePrice, // 전일 종가 (하루 종일 고정, 변경되지 않음)
-  previousMarketClose: baseClosePrice,  // 이전 마켓 세그먼트 종료 가격 (초기값은 전일 종가와 동일)
-  change: initialCurrentPrice - baseClosePrice, // 현재가 - 전일 종가
-  changePercent: baseClosePrice > 0 ? ((initialCurrentPrice - baseClosePrice) / baseClosePrice) * 100 : 0,
-  high: 470.00, // 일일 고가 (시뮬레이션용)
-  low: 465.00,  // 일일 저가 (시뮬레이션용)
-  volume: 125000000,
+  current: 0,
+  closePrice: 0,
+  previousMarketClose: 0,
+  change: 0,
+  changePercent: 0,
+  high: 0,
+  low: 0,
+  volume: 0,
   timestamp: new Date().toISOString(),
   marketStatus: getMarketStatus(),
 };
+
 
 export const newsItems: NewsItem[] = [
   {

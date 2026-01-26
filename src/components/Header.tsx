@@ -7,6 +7,7 @@ interface HeaderProps {
 }
 
 export default function Header({ price, lastUpdate }: HeaderProps) {
+  const isLoading = price.current === 0; // 로딩 중 상태 확인
   const isPositive = price.changePercent >= 0;
   const colorClass = isPositive ? 'text-tesla-green' : 'text-red-500';
   const marketLabel = getMarketLabel(price.marketStatus);
@@ -18,9 +19,9 @@ export default function Header({ price, lastUpdate }: HeaderProps) {
     const diff = now.getTime() - date.getTime();
     const seconds = Math.floor(diff / 1000);
     const minutes = Math.floor(seconds / 60);
-    
+
     const timeString = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-    
+
     if (seconds < 60) return `방금 전 (${timeString})`;
     if (minutes < 60) return `${minutes}분 전 (${timeString})`;
     return `${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
@@ -40,28 +41,34 @@ export default function Header({ price, lastUpdate }: HeaderProps) {
               </span>
             )}
           </div>
-          
+
           <div className="text-right flex items-center space-x-4">
-            {/* 기존 가격 정보 */}
+            {/* 가격 정보 - 로딩 중이면 '--' 표시 */}
             <div className="text-right">
-              <div className="text-2xl font-bold leading-tight">${price.current.toFixed(2)}</div>
+              <div className="text-2xl font-bold leading-tight">
+                {isLoading ? (
+                  <span className="text-gray-500 animate-pulse">$---.--</span>
+                ) : (
+                  `$${price.current.toFixed(2)}`
+                )}
+              </div>
               <div className="flex items-center justify-end space-x-2 mt-1">
                 <div className="text-sm text-gray-400">TSLA</div>
                 <span className={`text-xs px-2 py-1 rounded ${marketColor} bg-gray-700/50`}>
                   {marketLabel}
                 </span>
               </div>
-              {/* 변동률 (%)과 변동 금액 ($) - TSLA 종가 아래, 나란히 배치 */}
-              <div className={`flex items-center justify-end space-x-2 mt-1 ${colorClass}`}>
+              {/* 변동률 (%)과 변동 금액 ($) */}
+              <div className={`flex items-center justify-end space-x-2 mt-1 ${isLoading ? 'text-gray-500' : colorClass}`}>
                 <div className="text-sm">
-                  {price.changePercent >= 0 ? '+' : ''}{price.changePercent.toFixed(2)}%
+                  {isLoading ? '--.--%' : `${price.changePercent >= 0 ? '+' : ''}${price.changePercent.toFixed(2)}%`}
                 </div>
                 <div className="text-lg">
-                  {price.change >= 0 ? '+' : ''}${price.change.toFixed(2)}
+                  {isLoading ? '$--.--' : `${price.change >= 0 ? '+' : ''}$${price.change.toFixed(2)}`}
                 </div>
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                고: ${price.high.toFixed(2)} | 저: ${price.low.toFixed(2)}
+                {isLoading ? '고: $--.-- | 저: $--.--' : `고: $${price.high.toFixed(2)} | 저: $${price.low.toFixed(2)}`}
               </div>
             </div>
           </div>
@@ -70,3 +77,4 @@ export default function Header({ price, lastUpdate }: HeaderProps) {
     </header>
   );
 }
+
